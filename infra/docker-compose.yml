@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: cloudmon-postgres
+    environment:
+      POSTGRES_DB: cloudmon
+      POSTGRES_USER: cloudmon_user
+      POSTGRES_PASSWORD: cloudmon_pass_change_me
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - cloudmon-net
+    # No port exposed to the host network (fully internal)
+    restart: unless-stopped
+
+  # 2. Metrics Exporter & Scraper Backend
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: cloudmon-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+      - prometheus-targets:/etc/prometheus
+      - prom-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d' # 30-day retention default
+    networks:
+      - cloudmon-net
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # 3. Webhook Alert Routing
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: cloudmon-alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - cloudmon-net
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # 4. HTTP / SSL Blackbox Web-prober
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: cloudmon-blackbox
+    networks:
+      - cloudmon-net
+    restart: unless-stopped
+
+  # 5. Core Backend Application
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: cloudmon-backend
+    environment:
+      PORT: 5000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: cloudmon
+      DB_USER: cloudmon_user
+      DB_PASS: cloudmon_pass_change_me
+      JWT_SECRET: super_secret_jwt_key_mvp_change_me
+      PROMETHEUS_TARGETS_FILE: /etc/prometheus/blackbox_targets.json
+    volumes:
+      - prometheus-targets:/etc/prometheus
+    networks:
+      - cloudmon-net
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # 6. React/Vite Dashboard Frontend (Dev setup)
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: cloudmon-frontend
+    networks:
+      - cloudmon-net
+    restart: unless-stopped
+
+  # 7. Gateway Ingress Reverse Proxy & TLS Termination
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: cloudmon-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - cloudmon-net
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  pg-data:
+  prom-data:
+  prometheus-targets:  # Shared volume for writing URL target lists dynamically
+
+networks:
+  cloudmon-net:
+    driver: bridge

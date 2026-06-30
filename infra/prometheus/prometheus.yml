@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Load alerting rules
+rule_files:
+  - 'alert.rules.yml'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+scrape_configs:
+  # 1. Scrape internal metrics from the backend (Agent-reported metrics)
+  - job_name: 'cloudmon_backend_metrics'
+    metrics_path: '/internal/metrics'
+    static_configs:
+      - targets: ['backend:5000']
+
+  # 2. Scrape blackbox HTTP checker for URLs using dynamic file-based discovery
+  - job_name: 'cloudmon_blackbox_urls'
+    metrics_path: '/probe'
+    params:
+      module: [http_2xx]  # Look for a 2xx response
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/blackbox_targets.json'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

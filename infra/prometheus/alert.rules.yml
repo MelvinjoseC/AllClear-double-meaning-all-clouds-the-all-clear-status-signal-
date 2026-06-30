@@ -1,0 +1,52 @@
+groups:
+  - name: cloudmon_alert_rules
+    rules:
+      # 1. Server CPU threshold rule
+      - alert: HostHighCpu
+        expr: cloudmon_cpu_usage_percentage > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server CPU utilization is high"
+          description: "CPU usage is {{ $value | printf \"%.2f\" }}% on host."
+
+      # 2. Server Disk space threshold rule
+      - alert: HostHighDisk
+        expr: cloudmon_disk_usage_percentage > 85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server disk space is critical"
+          description: "Disk usage is {{ $value | printf \"%.2f\" }}% on host."
+
+      # 3. URL Uptime checker rule
+      - alert: SiteDown
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitored website is down"
+          description: "Website probe success is {{ $value }} (offline)."
+
+      # 4. URL Performance rule
+      - alert: SiteSlow
+        expr: probe_duration_seconds > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Monitored website response is slow"
+          description: "Website response time is {{ $value | printf \"%.2f\" }}s."
+
+      # 5. Agent dead-man's check
+      - alert: AgentOffline
+        expr: (time() - cloudmon_agent_last_seen_timestamp_seconds) > 90
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Agent has stopped reporting"
+          description: "No heartbeat received in over 90 seconds."

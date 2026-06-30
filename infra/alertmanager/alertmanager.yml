@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['tenant_id', 'monitored_item_id']
+  group_wait: 10s       # Wait 10s to see if more alerts for the same item fire
+  group_interval: 30s   # Buffer alerts for 30s before sending a new group
+  repeat_interval: 4h   # Re-send alerts if they are still firing after 4 hours
+  receiver: 'backend_webhook'
+
+receivers:
+  - name: 'backend_webhook'
+    webhook_configs:
+      - url: 'http://backend:5000/internal/alerts/webhook'
+        send_resolved: true  # Make sure Alertmanager notifies backend of resolutions
