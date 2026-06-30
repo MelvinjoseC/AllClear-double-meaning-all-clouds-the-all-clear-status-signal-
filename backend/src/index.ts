@@ -11,6 +11,9 @@ import { CustomRequest } from './middleware/auth';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Enable trusting proxy headers for rate limiting behind Nginx
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors());
 app.use(express.json());

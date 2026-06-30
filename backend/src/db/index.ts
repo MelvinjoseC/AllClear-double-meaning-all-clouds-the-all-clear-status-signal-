@@ -19,7 +19,10 @@ const pool = new Pool({
 export async function initDb() {
   const client = await pool.connect();
   try {
-    const schemaPath = path.join(__dirname, 'schema.sql');
+    let schemaPath = path.join(__dirname, 'schema.sql');
+    if (!fs.existsSync(schemaPath)) {
+      schemaPath = path.join(__dirname, '../../src/db/schema.sql');
+    }
     if (fs.existsSync(schemaPath)) {
       const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
       await client.query(schemaSql);
