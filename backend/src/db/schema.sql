@@ -1,6 +1,6 @@
 -- ==============================================================================
-# CLOUDMON DATABASE SCHEMA & ROW-LEVEL SECURITY DEFINITION
-# ==============================================================================
+-- CLOUDMON DATABASE SCHEMA & ROW-LEVEL SECURITY DEFINITION
+-- ==============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
