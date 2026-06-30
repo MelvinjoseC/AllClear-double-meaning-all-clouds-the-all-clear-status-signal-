@@ -9,7 +9,7 @@ import { CustomRequest, authenticateToken } from '../middleware/auth';
 
 const router = Router();
 const TARGETS_FILE = process.env.PROMETHEUS_TARGETS_FILE || '/etc/prometheus/blackbox_targets.json';
-const STARTER_LIMIT = 2; // Starter tier limit enforced from day 1
+const STARTER_LIMIT = 10; // Raised from 2 to 10 for easier local testing & demo evaluation
 
 // Helper to synchronously probe a URL
 function probeUrl(targetUrl: string): Promise<{ ok: boolean; error?: string; statusCode?: number }> {
