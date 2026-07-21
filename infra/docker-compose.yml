@@ -86,6 +86,7 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      target: development
     container_name: cloudmon-frontend
     networks:
       - cloudmon-net
