@@ -139,3 +139,45 @@ Let's simulate a website outage to test the translation layer:
 2.  **Hashed Credentials**: Password strings and server agent tokens are never stored in plaintext and are hashed using bcrypt.
 3.  **Low-Privilege Execution**: The client agent runs under a dedicated system user/group `cloudmon-agent` with strict configuration file permissions (`600`) and systemd security sandboxing.
 4.  **Network Isolation**: Administrative metrics (`/internal/metrics`) and Postgres/Prometheus admin ports are blocked by Nginx and accessible only within the container bridge network.
+
+---
+
+## 🌐 Production Deployment Guides
+
+CloudMon is ready for enterprise production and supports three major deployment pathways:
+
+### 1. Hardened Docker Compose Production Stack
+For single-node staging or production virtual machines, use the production-hardened compose config. It configures restart policies, adds container resource limits (CPU/Memory limits), and serves compiled static assets over Nginx:
+```bash
+# Start the production stack
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d --build
+```
+
+### 2. Infrastructure as Code (AWS Terraform)
+Modular AWS blueprints are located under `infra/terraform/` to quickly provision:
+*   **VPC**: Public and private subnets across multiple availability zones, complete with Internet Gateway and NAT Gateway.
+*   **ECS Fargate**: Serverless backend API tasks and Nginx-based frontend tasks.
+*   **RDS PostgreSQL**: Managed DB instance situated inside private subnets.
+*   **Application Load Balancer (ALB)**: Internet-facing proxy routing web and API requests.
+
+To deploy:
+```bash
+cd infra/terraform
+terraform init
+terraform plan
+terraform apply -var="database_password=secure_db_pass" -var="jwt_secret=secure_jwt_secret"
+```
+
+### 3. Container Orchestration (Kubernetes Helm Chart)
+Deploy the platform using Helm on any Kubernetes cluster (EKS, GKE, AKS, or local kind/Minikube):
+```bash
+# Validate chart templates
+helm lint infra/helm/cloudmon/
+
+# Render templates locally
+helm template cloudmon infra/helm/cloudmon/
+
+# Install or upgrade
+helm install cloudmon infra/helm/cloudmon/ --values infra/helm/cloudmon/values.yaml
+```
+The Helm chart configures a PostgreSQL StatefulSet with PV/PVC storage bindings, backend/frontend deployments with replica controls, service resources, and ingress endpoints.

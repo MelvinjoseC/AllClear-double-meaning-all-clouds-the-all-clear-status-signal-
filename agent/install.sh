@@ -13,6 +13,12 @@
 
 set -e
 
+# Ensure script is run as root
+if [ "$EUID" -ne 0 ]; then
+    echo -e "[\e[31mCloudMon-Error\e[0m] This installer must be run as root. Please run with sudo." >&2
+    exit 1
+fi
+
 # Defaults
 CHECK_INTERVAL=30
 CA_BUNDLE=""
