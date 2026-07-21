@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudmon-postgres
+  labels:
+    app: cloudmon-postgres
+spec:
+  ports:
+    - port: {{ .Values.postgres.service.port }}
+      targetPort: 5432
+  selector:
+    app: cloudmon-postgres
+  clusterIP: None # Headless service for StatefulSet

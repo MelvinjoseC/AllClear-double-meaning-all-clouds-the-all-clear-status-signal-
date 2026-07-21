@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudmon-backend
+  labels:
+    app: cloudmon-backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      app: cloudmon-backend
+  template:
+    metadata:
+      labels:
+        app: cloudmon-backend
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: 5000
+          env:
+            - name: PORT
+              value: "5000"
+            - name: DB_HOST
+              value: "cloudmon-postgres"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "{{ .Values.postgres.dbName }}"
+            - name: DB_USER
+              value: "{{ .Values.postgres.user }}"
+            - name: DB_PASS
+              value: "{{ .Values.postgres.pass }}"
+            - name: JWT_SECRET
+              value: "{{ .Values.backend.env.jwtSecret }}"
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          healthCheck: # wait, liveness/readiness probes in K8s are specified as livenessProbe/readinessProbe
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10

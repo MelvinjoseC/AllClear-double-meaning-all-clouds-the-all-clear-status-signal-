@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cloudmon-postgres
+  labels:
+    app: cloudmon-postgres
+spec:
+  serviceName: cloudmon-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudmon-postgres
+  template:
+    metadata:
+      labels:
+        app: cloudmon-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgres.image }}"
+          env:
+            - name: POSTGRES_DB
+              value: "{{ .Values.postgres.dbName }}"
+            - name: POSTGRES_USER
+              value: "{{ .Values.postgres.user }}"
+            - name: POSTGRES_PASSWORD
+              value: "{{ .Values.postgres.pass }}"
+          ports:
+            - containerPort: 5432
+              name: dbport
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          volumeMounts:
+            - name: pg-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: pg-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: "{{ .Values.postgres.persistence.size }}"
