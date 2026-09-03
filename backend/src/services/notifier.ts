@@ -153,6 +153,8 @@ export async function sendAlert(tenantId: string, email: string, whatsappNumber:
         await sendDiscordAlert(config.webhook_url, notification);
       } else if (channel.channel_type === 'webhook' && config.url) {
         await sendCustomWebhookAlert(config.url, config.secret, notification);
+      } else if (channel.channel_type === 'telegram' && config.bot_token && config.chat_id) {
+        await sendTelegramAlert(config.bot_token, config.chat_id, notification);
       }
     }
   } catch (err) {
@@ -165,6 +167,9 @@ export async function sendAlert(tenantId: string, email: string, whatsappNumber:
   }
   if (process.env.DISCORD_WEBHOOK_URL) {
     await sendDiscordAlert(process.env.DISCORD_WEBHOOK_URL, notification);
+  }
+  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+    await sendTelegramAlert(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHAT_ID, notification);
   }
 }
 
@@ -325,5 +330,41 @@ export async function sendCustomWebhookAlert(
   }
   const ok = await postJson(webhookUrl, payload, headers);
   if (ok) console.log(`[Webhook Dispatch] Alert posted to custom webhook.`);
+  return ok;
+}
+
+/**
+ * Telegram Bot Alert Dispatcher
+ */
+export function buildTelegramMessage(notification: AlertNotification): string {
+  const { message, action } = translateAlert(notification);
+  const isResolved = notification.status === 'resolved';
+  const header = isResolved ? '<b>[AllClear] System Status Normal</b>' : '<b>[AllClear] Incident Alert Triggered</b>';
+
+  return (
+    `${header}\n\n` +
+    `<b>Node:</b> <code>${notification.monitoredItemName}</code>\n` +
+    `<b>Severity:</b> ${notification.severity.toUpperCase()}\n` +
+    `<b>Status:</b> ${notification.status.toUpperCase()}\n\n` +
+    `<b>Summary:</b>\n${message}\n\n` +
+    `<b>Suggested Action:</b>\n${action}`
+  );
+}
+
+export async function sendTelegramAlert(
+  botToken: string,
+  chatId: string,
+  notification: AlertNotification
+): Promise<boolean> {
+  const text = buildTelegramMessage(notification);
+  const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+  const payload = {
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+  };
+  const ok = await postJson(telegramUrl, payload);
+  if (ok) console.log(`[Telegram Dispatch] Alert message posted to chat ${chatId}.`);
   return ok;
 }
