@@ -13,9 +13,11 @@ import json
 import ssl
 import shutil
 import platform
+import argparse
 import urllib.request
 import urllib.error
 
+AGENT_VERSION = "1.1.0"
 CONFIG_PATH = "/etc/cloudmon-agent.conf"
 
 def log_error(msg):
@@ -24,25 +26,26 @@ def log_error(msg):
 def log_info(msg):
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [INFO] {msg}")
 
-def load_config():
-    if not os.path.exists(CONFIG_PATH):
-        log_error(f"Configuration file not found at {CONFIG_PATH}")
+def load_config(path=None):
+    cfg_file = path or CONFIG_PATH
+    if not os.path.exists(cfg_file):
+        log_error(f"Configuration file not found at {cfg_file}")
         sys.exit(1)
     
     # Ensure configuration file is secure (permissions 600)
     try:
-        mode = os.stat(CONFIG_PATH).st_mode
+        mode = os.stat(cfg_file).st_mode
         # In non-Windows systems, check for strict permissions (600: read/write owner only)
         if os.name != 'nt':
             if (mode & 0o077) != 0:
-                log_error(f"Unsafe configuration file permissions! {CONFIG_PATH} must be owned by the agent user and set to chmod 600.")
+                log_error(f"Unsafe configuration file permissions! {cfg_file} must be owned by the agent user and set to chmod 600.")
                 sys.exit(1)
     except Exception as e:
         log_error(f"Failed to check config file permissions: {e}")
         sys.exit(1)
 
     try:
-        with open(CONFIG_PATH, 'r') as f:
+        with open(cfg_file, 'r') as f:
             config = json.load(f)
         return config
     except Exception as e:
@@ -402,42 +405,99 @@ def send_report(url, token, payload, ca_bundle=None):
         return None, None
 
 def main():
-    log_info("Starting AllClear Agent...")
-    config = load_config()
-    
+    parser = argparse.ArgumentParser(
+        description="AllClear Agent — Lightweight multi-cloud observability daemon."
+    )
+    parser.add_argument("-v", "--version", action="store_true", help="Show agent version and environment details.")
+    parser.add_argument("-c", "--config", type=str, default=None, help="Path to custom configuration file.")
+    parser.add_argument("--dry-run", action="store_true", help="Collect one metrics sample and print to stdout without submitting.")
+    parser.add_argument("--once", action="store_true", help="Collect and submit metrics exactly once, then exit.")
+    parser.add_argument("--test-config", action="store_true", help="Validate configuration file and test HTTPS API connectivity.")
+    parser.add_argument("--interval", type=int, default=None, help="Override check interval in seconds.")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(f"AllClear Agent v{AGENT_VERSION} (Python {platform.python_version()} on {platform.system()} {platform.machine()})")
+        sys.exit(0)
+
+    if args.dry_run:
+        log_info("Executing dry-run metrics collection...")
+        mock_cfg = {"server_id": "dry-run-preview-host", "processes": ["nginx", "postgres", "redis"]}
+        if args.config and os.path.exists(args.config):
+            try:
+                mock_cfg = load_config(args.config)
+            except Exception:
+                pass
+        elif os.path.exists(CONFIG_PATH):
+            try:
+                mock_cfg = load_config(CONFIG_PATH)
+            except Exception:
+                pass
+
+        payload = build_metrics_payload(mock_cfg)
+        print(json.dumps(payload, indent=2))
+        log_info("Dry-run completed successfully.")
+        sys.exit(0)
+
+    config = load_config(args.config)
     api_url = config.get("api_url", "")
     token = config.get("token", "")
     server_id = config.get("server_id", "")
-    check_interval = config.get("check_interval", 30)
+    check_interval = args.interval or config.get("check_interval", 30)
     ca_bundle = config.get("ca_bundle")
-    
+
     if not api_url or not token or not server_id:
         log_error("Missing required config fields (api_url, token, server_id)")
         sys.exit(1)
-        
-    # Enforce TLS-only connection security
+
     if not api_url.startswith("https://"):
         log_error(f"Insecure API URL '{api_url}'. AllClear Agent requires HTTPS endpoints to protect token credentials. Failing startup.")
         sys.exit(1)
 
+    if args.test_config:
+        log_info(f"Validating configuration for server '{server_id}' targeting '{api_url}'...")
+        log_info("Testing connection...")
+        try:
+            req = urllib.request.Request(api_url.replace("/api/agent/report", "/health"), method="GET")
+            ctx = ssl.create_default_context()
+            if ca_bundle:
+                ctx.load_verify_locations(cafile=ca_bundle)
+            with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+                log_info(f"API connectivity verified. Health status: {resp.status}")
+                sys.exit(0)
+        except Exception as e:
+            log_error(f"Connection test failed: {e}")
+            sys.exit(1)
+
+    log_info(f"Starting AllClear Agent v{AGENT_VERSION} (reporting every {check_interval}s)...")
+
+    if args.once:
+        log_info("Executing single metric submission (--once)...")
+        payload = build_metrics_payload(config)
+        status, body = send_report(api_url, token, payload, ca_bundle)
+        if status in (200, 201):
+            log_info("Metric report submitted successfully.")
+            sys.exit(0)
+        else:
+            log_error(f"Metric submission failed with status {status}.")
+            sys.exit(1)
+
     retry_delay = 5
-    max_retry_delay = 300 # 5 minutes
+    max_retry_delay = 300  # 5 minutes
 
     while True:
         log_info("Collecting metrics...")
         payload = build_metrics_payload(config)
-        
         status, response_body = send_report(api_url, token, payload, ca_bundle)
-        
-        if status == 200 or status == 201:
+
+        if status in (200, 201):
             log_info("Metrics report submitted successfully.")
-            retry_delay = 5 # Reset backoff
+            retry_delay = 5
             time.sleep(check_interval)
         else:
-            # Network failure or API rate-limit/errors
             log_error(f"Report submission failed. Retrying in {retry_delay}s...")
             time.sleep(retry_delay)
-            # Exponential backoff
             retry_delay = min(retry_delay * 2, max_retry_delay)
 
 if __name__ == "__main__":
