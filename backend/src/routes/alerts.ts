@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool, { adminQuery, withTenantClient } from '../db';
 import { sendAlert, AlertNotification } from '../services/notifier';
 import { CustomRequest, authenticateToken } from '../middleware/auth';
+import { isItemInMaintenance } from './maintenance';
 
 const router = Router();
 
@@ -84,6 +85,22 @@ router.post('/webhook', async (req: Request, res: Response) => {
       const { message, action } = require('../services/notifier').translateAlert(notification);
 
       if (status === 'firing') {
+        // Check if item is in active maintenance window
+        const inMaintenance = await isItemInMaintenance(tenantId, monitoredItemId);
+        if (inMaintenance) {
+          console.log(`[ALERT SUPPRESSED] Item ${monitoredItemId} is in active maintenance window. Suppressing emergency alerts.`);
+          await adminQuery(
+            `INSERT INTO alert_history (tenant_id, monitored_item_id, alert_name, severity, status, message, suggested_action, starts_at)
+             VALUES ($1, $2, $3, $4, 'suppressed_maintenance', $5, 'Maintenance window in progress. Alerts muted.', $6)`,
+            [tenantId, monitoredItemId, alertName, severity, `[Maintenance Window] ${message}`, startsAt]
+          );
+          await adminQuery(
+            "UPDATE monitored_items SET status = 'yellow', last_checked_at = NOW() WHERE id = $1",
+            [monitoredItemId]
+          );
+          continue; // Do not dispatch external notifications
+        }
+
         // Insert alert into history log
         await adminQuery(
           `INSERT INTO alert_history (tenant_id, monitored_item_id, alert_name, severity, status, message, suggested_action, starts_at)
