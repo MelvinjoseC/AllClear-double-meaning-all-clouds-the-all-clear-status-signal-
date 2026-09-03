@@ -1,183 +1,215 @@
-# 🛡️ CloudMon — Multi-Cloud Monitoring SaaS MVP
+<div align="center">
 
-CloudMon is a lightweight, secure, and multi-tenant monitoring SaaS tailored for small businesses with no dedicated DevOps staff. It unifies server monitoring and shared hosting URL monitoring, translates raw technical alerts into plain English, and dispatches them via WhatsApp and Email.
+# 🛡️ AllClear — Multi-Cloud Observability Engine
 
----
+### *"All Clouds. The All-Clear Status Signal."*
 
-## 🚀 MVP Decisions for the User (Review Required)
+[![CI Pipeline](https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-/actions/workflows/ci.yml/badge.svg)](https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-/actions/workflows/ci.yml)
+[![CodeQL Security](https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-/actions/workflows/codeql.yml/badge.svg)](https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Helm Chart: v1.1.0](https://img.shields.io/badge/Helm-v1.1.0-326CE5.svg?logo=helm&logoColor=white)](infra/helm/allclear)
+[![Status Badge](https://img.shields.io/badge/AllClear-Operational-10b981.svg)](ARCHITECTURE.md)
 
-Please review and confirm these MVP defaults during your evaluation:
-1. **Alerting Channels Fallback**: Real alerts require Twilio WhatsApp and SMTP credentials. If these are omitted from your `.env` configuration, CloudMon will log all formatted plain-English messages directly to the system console and a local debug file (`backend/logs/alerts.log`) for local testing.
-2. **Prometheus Retention Policy**: Confirmed 30-day metrics history default (`--storage.tsdb.retention.time=30d`).
-3. **Starter Tier Limits**: Confirmed and enforced a starter tier limit of **2 monitored items** (combination of servers/URLs) per tenant in the API from day one.
+<p align="center">
+  <b>A production-grade, multi-tenant observability platform built for modern multi-cloud estates.</b><br/>
+  Zero-dependency telemetry agents, PostgreSQL Row-Level Security (RLS) isolation, background TLS probers, multi-channel dispatchers (Slack, Discord, Telegram, WhatsApp, Webhooks), and human-first incident translations.
+</p>
 
----
-
-## 🛠️ Technology Stack & Folder Structure
-
-*   **`agent/`**: Zero-dependency Python 3 agent that parses `/proc` filesystem metrics (CPU percentage delta, memory, disk `statvfs`, system and process uptime) and submits them via HTTPS POST with TLS validation.
-*   **`infra/`**: Docker Compose stack containing PostgreSQL, Prometheus, Alertmanager, Prometheus Blackbox Exporter, and Nginx.
-*   **`backend/`**: Node.js + TypeScript + Express API service utilizing PostgreSQL Row-Level Security (RLS) policies.
-*   **`frontend/`**: React + Vite + TailwindCSS v3 single-page dashboard.
-*   **`tests/`**: Automated verification test suite for agent and backend translations.
+</div>
 
 ---
 
-## 📦 Setting Up the System Locally
+## 💡 The Double Meaning Behind AllClear
 
-### Step 1: Clone the monorepo and generate TLS certificates
-Ensure you have Docker and Docker Compose installed.
-We must generate self-signed TLS certificates for local Nginx HTTPS gateway termination.
+| Concept | What It Delivers |
+| :--- | :--- |
+| **"All Clouds"** | Unifies disparate cloud infrastructure across **AWS, Google Cloud Platform (GCP), Microsoft Azure, DigitalOcean, and bare-metal VPS** into a single radar view without vendor lock-in. |
+| **"The All-Clear Status Signal"** | Eliminates monitoring fatigue. Instead of cryptically screaming `deriv(node_disk_usage[5m]) > 0.02`, AllClear gives teams explicit operational reassurance: **"ALL SYSTEMS CLEAR — 100% OPERATIONAL"** when nominal, and actionable, plain-English human recommendations when an incident occurs. |
 
-In Git Bash / Linux:
+---
+
+## ✨ Core Platform Features
+
+### 🖥️ Zero-Dependency Pure-Python Agent
+- Written strictly in standard library Python 3 (`urllib`, `os`, `json`, `shutil`) — **zero `pip` installations required**.
+- Real-time `/proc/stat` CPU tick delta calculation, `/proc/meminfo` buffer/cache memory parser, and storage saturation metrics.
+- High-throughput `/proc/net/dev` network bandwidth parser (KB/s in/out & packet errors) and `/proc/diskstats` I/O prober.
+- Resilient cross-platform fallbacks for Windows and macOS development environments.
+- CLI diagnostic flags: `--version`, `--dry-run`, `--test-config`, `--interval`.
+
+### 🔒 Enterprise Multi-Tenant Row Level Security (RLS)
+- True database engine tenant separation enforced through PostgreSQL 16 `FORCE ROW LEVEL SECURITY`.
+- Connection-bound tenant scoping: `SET LOCAL app.current_tenant = '$tenant_id'` ensures zero cross-tenant data leakage even in complex relational queries.
+- Hashed agent token authentication via salted Bcrypt with dedicated `SECURITY DEFINER` verification bypasses.
+
+### 🌐 Continuous TLS & SSL Certificate Prober
+- Background TLS socket handshake prober inspecting remote SSL certificates.
+- Automatic extraction of Certificate Authority issuer, subject, valid date ranges, and days remaining.
+- Multi-tier alert thresholds for certificates expiring within 14 days (warning) and 72 hours (critical).
+
+### 🔔 Multi-Channel Alert Dispatchers & Maintenance Windows
+- **Human-First Translations**: Automatically converts raw metrics into plain-English diagnostics and immediate suggested next steps.
+- **Multi-Channel Delivery**:
+  - 💬 **Slack**: Block Kit formatted incident cards.
+  - 🎮 **Discord**: Color-coded rich embed status cards.
+  - ✈️ **Telegram**: HTML bot notifications with node code blocks.
+  - 📱 **WhatsApp**: High-priority SMS/WhatsApp dispatch via Twilio API.
+  - 🔗 **Custom Webhooks**: JSON payload streaming with HMAC-SHA256 digital signatures (`X-AllClear-Signature`).
+- **Maintenance Windows Engine**: Suppress false-positive alerts during scheduled downtime and maintenance periods.
+
+### 📊 Public Status Pages & Embeddable Badges
+- Unauthenticated public JSON status API for public transparency.
+- Dynamic SVG status badge generator compatible with GitHub READMEs and landing pages (`/api/public/badges/:tenantId/status.svg`).
+- Interactive React dashboard featuring the **AllClear Radar Pulse Banner**, real-time SVG sparklines, and cloud provider filtering.
+
+---
+
+## 🏗️ System Architecture
+
+```
+                 +-------------------------------------------------------+
+                 |              Monitored Nodes (Any Cloud)             |
+                 |  [ AWS EC2 ]   [ Azure VM ]   [ GCP GCE ]   [ VPS ]   |
+                 +---------------------------+---------------------------+
+                                             | HTTPS / Token-Bound POST
+                                             v
++------------------------+      +---------------------------+      +------------------------+
+|   AllClear Radar UI    |<---->|  AllClear Express API     |<---->|   PostgreSQL 16 (RLS)  |
+|  (React 18 + Tailwind) |      |  (TypeScript Control)     |      |  (Strict Tenant Sep)   |
++------------------------+      +-------------+-------------+      +------------------------+
+                                              |
+                   +--------------------------+--------------------------+
+                   |                          |                          |
+                   v                          v                          v
+      +------------------------+ +------------------------+ +------------------------+
+      |    Prometheus TSDB     | |   TLS Certificate      | |   Multi-Channel Engine |
+      |  (Scraping & Rules)    | |   Handshake Prober     | | (Slack/Discord/TG/SMS) |
+      +-----------+------------+ +------------------------+ +------------------------+
+                  |
+                  v
+      +------------------------+
+      |  Alertmanager Router   |
+      +------------------------+
+```
+
+*For comprehensive architecture specifications, database schemas, and STRIDE threat models, read [ARCHITECTURE.md](ARCHITECTURE.md).*
+
+---
+
+## 🚀 Quickstart Guide
+
+### Prerequisites
+- Docker & Docker Compose (`v2.20+`)
+- Node.js `v20+` and Python `v3.8+` (for local development)
+
+### 1. Run the Full Stack via Docker Compose
 ```bash
+# Clone repository
+git clone https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-.git
+cd AllClear-double-meaning-all-clouds-
+
+# Generate TLS certificates for local Nginx gateway
 cd infra/nginx
-./generate-certs.sh
+./generate-certs.sh # Or ./generate-certs.ps1 on Windows
 cd ../..
+
+# Launch all microservices
+docker compose -f infra/docker-compose.yml up -d --build
 ```
+Access the dashboard at **`https://localhost`** (or `http://localhost:5000` for raw API).
 
-On Windows (PowerShell):
-```powershell
-cd infra/nginx
-./generate-certs.ps1
-cd ../..
-```
-
-### Step 2: Configure Environment Variables
-Create a `.env` file in the `backend/` directory:
-```env
-PORT=5000
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=cloudmon
-DB_USER=cloudmon_user
-DB_PASS=cloudmon_pass_change_me
-JWT_SECRET=super_secret_jwt_key_mvp_change_me
-PROMETHEUS_TARGETS_FILE=/etc/prometheus/blackbox_targets.json
-
-# Optional: WhatsApp Integration (Twilio)
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
-
-# Optional: Email Integration (SMTP)
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=alerts@cloudmon.io
-```
-
-### Step 3: Spin up the Docker Compose Stack
-From the root workspace directory, run:
+### 2. Connect a Linux Server
+In the AllClear dashboard, click **Add Monitor** -> **Linux Server**. Copy the one-line shell installer:
 ```bash
-cd infra
-docker compose up --build -d
+curl -sSL https://localhost/api/agent/install.sh?token=YOUR_TOKEN&server_id=YOUR_ID | sudo bash
 ```
-This will compile and launch Nginx, Postgres, Prometheus, Alertmanager, Blackbox Exporter, the Node backend, and the React frontend.
+
+### 3. Deploy to Kubernetes via Helm
+AllClear includes a production-ready Helm chart with Horizontal Pod Autoscaling (HPA) and Pod Disruption Budgets (PDB):
+```bash
+# Lint chart templates
+helm lint infra/helm/allclear/
+
+# Deploy to your Kubernetes cluster
+helm install allclear infra/helm/allclear/ -f infra/helm/allclear/values.yaml
+```
 
 ---
 
-## 🧪 Running Automated Tests
+## 🧪 Automated Testing & Verification
 
-To verify calculations and translation pipelines before launching the services:
+The repository includes a comprehensive 17-test verification suite covering backend RLS isolation, alerting translators, multi-channel dispatchers, and Python agent telemetry parsing:
 
-### 1. Test Agent CPU Delta calculation
-Run the Python test script:
 ```bash
-python tests/test_agent.py
-```
-
-### 2. Test Backend Alert translation and Token Binding
-First compile the backend:
-```bash
-cd backend
-npm install
-npm run build
-cd ..
-```
-Then run the Node test runner:
-```bash
+# 1. Run Backend Unit & Integration Tests (10 test suites)
+npm run build --prefix backend
 node tests/test_backend.js
+
+# 2. Run Python Agent Diagnostic & /proc Parser Tests (7 test suites)
+python tests/test_agent.py
+
+# 3. Verify Agent CLI Diagnostics
+python agent/agent.py --version
+python agent/agent.py --dry-run
 ```
 
 ---
 
-## 📈 Manual Verification Walkthrough
+## 📁 Repository Structure
 
-Follow these steps to manually test the onboarding flow and alerting pipeline:
-
-### 1. Portal Onboarding
-1. Open `https://localhost` in your browser. (Accept the self-signed certificate warning in your browser for local testing).
-2. Register a new account.
-3. Click **Add App / Server** in the dashboard.
-4. **Test Website Monitor**:
-    *   Enter a display name and register `http://httpbin.org/status/200`.
-    *   The backend will perform a synchronous probe, verify it returns 200, save the target to `blackbox_targets.json`, and the card will immediately show a **green** status.
-5. **Test Linux Server Monitor**:
-    *   Enter a display name (e.g. `My Cloud VPS`).
-    *   Click **Register**. An overlay will open showing the unique bearer token and a `curl` installer command.
-    *   Run the installer script on a test Linux server (or run `agent.py` locally for testing by manually placing a config file at `/etc/cloudmon-agent.conf`).
-    *   Once the agent checks in, the dashboard overlay will transition to a **success** screen.
-
-### 2. Triggering Alert & Translation Pipeline
-Let's simulate a website outage to test the translation layer:
-1. Register a website monitor targeting a failing URL, e.g., `http://httpbin.org/status/500`.
-2. Within 2 minutes, Prometheus will detect the failure (`probe_success == 0`) and Alertmanager will fire the alert.
-3. Alertmanager POSTs the firing webhook internally to Nginx -> backend `/internal/alerts/webhook`.
-4. The translation layer converts the alert:
-    *   *Resulting message*: `🚨 Your website [httpbin] is currently OFFLINE.`
-    *   *Action recommendation*: `Check your hosting provider's status page, verify DNS settings, or restart your web server.`
-5. The alert is saved to the **Alert History** log, the dashboard card status turns **red**, and notifications are sent. Verify the notification text in `backend/logs/alerts.log` or your console output.
-6. Delete the failing monitor or wait for it to recover. Alertmanager sends a resolution webhook, the alert status updates to `resolved`, a green status notification is dispatched, and the dashboard transitions back to **green**.
+```
+AllClear/
+├── .github/
+│   └── workflows/              # CI Pipeline (tests, linting) & CodeQL Static Security
+├── agent/
+│   ├── agent.py                # Pure-Python zero-dependency metrics collector
+│   └── install.sh              # Idempotent Linux systemd service installer
+├── backend/
+│   ├── src/
+│   │   ├── db/                 # PostgreSQL schema.sql & RLS context pool
+│   │   ├── middleware/         # JWT authentication & tenant scoping
+│   │   ├── routes/             # Monitored targets, agent, maintenance, status page
+│   │   └── services/           # Notifier (Slack/Discord/TG), SSL prober, alert translation
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── components/         # Modular components (Radar banner, sparklines, cards)
+│   │   ├── App.tsx             # Main AllClear dashboard application
+│   │   └── types.ts            # TypeScript interfaces
+│   └── package.json
+├── infra/
+│   ├── docker-compose.yml      # Local development and staging compose stack
+│   ├── docker-compose.prod.yml # Production resource-limited compose stack
+│   ├── grafana/                # Pre-configured AllClear Multi-Cloud overview dashboard
+│   ├── helm/allclear/          # Production Kubernetes Helm chart (HPA, PDB, Ingress)
+│   ├── nginx/                  # Reverse proxy gateway and SSL termination
+│   ├── prometheus/             # Alert rules, scrape configs, and blackbox probers
+│   └── terraform/              # AWS ECS Fargate, RDS PostgreSQL, and ALB IaC
+├── tests/
+│   ├── test_agent.py           # Python agent unit tests
+│   └── test_backend.js         # Backend RLS, alert translation & prober tests
+├── ARCHITECTURE.md             # Detailed architecture guide & STRIDE threat model
+├── CHANGELOG.md                # Semantic version release notes
+├── CONTRIBUTING.md             # Contribution guidelines & coding conventions
+├── LICENSE                     # MIT License
+└── SECURITY.md                 # Vulnerability disclosure policy & security model
+```
 
 ---
 
-## 🔒 Security Summary
+## 📜 Documentation Index
 
-1.  **Row-Level Security (RLS)**: Enforced via PostgreSQL rules on `monitored_items`, `agent_tokens`, and `alert_history` ensuring full multi-tenancy. Verified through custom connection context parameters.
-2.  **Hashed Credentials**: Password strings and server agent tokens are never stored in plaintext and are hashed using bcrypt.
-3.  **Low-Privilege Execution**: The client agent runs under a dedicated system user/group `cloudmon-agent` with strict configuration file permissions (`600`) and systemd security sandboxing.
-4.  **Network Isolation**: Administrative metrics (`/internal/metrics`) and Postgres/Prometheus admin ports are blocked by Nginx and accessible only within the container bridge network.
+- [🏛️ Architecture & Threat Model](ARCHITECTURE.md)
+- [📋 Release Changelog](CHANGELOG.md)
+- [🤝 Contributing Guidelines](CONTRIBUTING.md)
+- [🔒 Security Policy](SECURITY.md)
+- [📊 Grafana Dashboard Guide](infra/grafana/README.md)
 
 ---
 
-## 🌐 Production Deployment Guides
+## 📄 License
 
-CloudMon is ready for enterprise production and supports three major deployment pathways:
-
-### 1. Hardened Docker Compose Production Stack
-For single-node staging or production virtual machines, use the production-hardened compose config. It configures restart policies, adds container resource limits (CPU/Memory limits), and serves compiled static assets over Nginx:
-```bash
-# Start the production stack
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d --build
-```
-
-### 2. Infrastructure as Code (AWS Terraform)
-Modular AWS blueprints are located under `infra/terraform/` to quickly provision:
-*   **VPC**: Public and private subnets across multiple availability zones, complete with Internet Gateway and NAT Gateway.
-*   **ECS Fargate**: Serverless backend API tasks and Nginx-based frontend tasks.
-*   **RDS PostgreSQL**: Managed DB instance situated inside private subnets.
-*   **Application Load Balancer (ALB)**: Internet-facing proxy routing web and API requests.
-
-To deploy:
-```bash
-cd infra/terraform
-terraform init
-terraform plan
-terraform apply -var="database_password=secure_db_pass" -var="jwt_secret=secure_jwt_secret"
-```
-
-### 3. Container Orchestration (Kubernetes Helm Chart)
-Deploy the platform using Helm on any Kubernetes cluster (EKS, GKE, AKS, or local kind/Minikube):
-```bash
-# Validate chart templates
-helm lint infra/helm/cloudmon/
-
-# Render templates locally
-helm template cloudmon infra/helm/cloudmon/
-
-# Install or upgrade
-helm install cloudmon infra/helm/cloudmon/ --values infra/helm/cloudmon/values.yaml
-```
-The Helm chart configures a PostgreSQL StatefulSet with PV/PVC storage bindings, backend/frontend deployments with replica controls, service resources, and ingress endpoints.
+This project is licensed under the [MIT License](LICENSE).
+<div align="center">
+  <sub>Engineered with excellence by <a href="https://github.com/MelvinjoseC">MelvinjoseC</a></sub>
+</div>
