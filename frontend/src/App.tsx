@@ -102,8 +102,8 @@ export default function App() {
 
   // Onboarding Polling Timer
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    let pollInterval: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
+    let pollInterval: ReturnType<typeof setInterval>;
 
     if (onboardingItem && !onboardingSuccess) {
       if (onboardingSeconds <= 0) {
@@ -363,8 +363,8 @@ export default function App() {
             <div className="w-14 h-14 bg-blue-600/10 border border-blue-500/30 rounded-2xl flex items-center justify-center mb-4">
               <Shield className="w-8 h-8 text-blue-500" />
             </div>
-            <h2 className="text-3xl font-extrabold text-white tracking-tight">CloudMon</h2>
-            <p className="text-gray-400 text-sm mt-1">Simple monitoring for small business servers & URLs</p>
+            <h2 className="text-3xl font-extrabold text-white tracking-tight">AllClear</h2>
+            <p className="text-gray-400 text-sm mt-1">Multi-cloud monitoring & plain-English status signals</p>
           </div>
 
           <form onSubmit={handleAuth} className="space-y-5">
@@ -446,7 +446,7 @@ export default function App() {
         <div>
           <div className="h-16 flex items-center gap-3 px-6 border-b border-darkBorder">
             <Shield className="w-6 h-6 text-blue-500" />
-            <span className="text-xl font-bold tracking-tight text-white font-['Outfit']">CloudMon</span>
+            <span className="text-xl font-bold tracking-tight text-white font-['Outfit']">AllClear</span>
           </div>
 
           <div className="px-4 py-6 space-y-1">
@@ -540,7 +540,7 @@ export default function App() {
                   </div>
                   <h3 className="text-xl font-bold text-white mb-2">No monitored nodes yet</h3>
                   <p className="text-gray-400 text-sm max-w-sm mb-8 leading-relaxed">
-                    CloudMon monitors your websites and servers. Get started by registering your first application.
+                    AllClear monitors your websites and multi-cloud servers. Get started by registering your first node.
                   </p>
                   <button 
                     onClick={() => setShowAddModal(true)}
@@ -767,7 +767,7 @@ export default function App() {
                     required
                   />
                   <p className="text-gray-500 text-[11px] mt-1.5">
-                    CloudMon will check response codes and uptime every 1-2 mins.
+                    AllClear will check response codes and uptime every 1-2 mins.
                   </p>
                 </div>
               ) : (
@@ -868,7 +868,7 @@ export default function App() {
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h3 className="text-2xl font-bold text-white font-['Outfit']">Install Agent: {onboardingItem.name}</h3>
-                <p className="text-sm text-gray-400 mt-1">Follow these steps to connect your server to CloudMon</p>
+                <p className="text-sm text-gray-400 mt-1">Follow these steps to connect your server to AllClear</p>
               </div>
               <button 
                 onClick={() => setOnboardingItem(null)} 
@@ -930,7 +930,7 @@ export default function App() {
                           <li>Confirm systemd is available (<code>systemctl --version</code>)</li>
                           <li>Check if agent process has started (<code>systemctl status cloudmon-agent</code>)</li>
                           <li>Inspect agent error logs (<code>journalctl -u cloudmon-agent -n 20</code>)</li>
-                          <li>Ensure your server can reach the CloudMon endpoint (<code>curl -I https://localhost/api/health</code>)</li>
+                          <li>Ensure your server can reach the AllClear endpoint (<code>curl -I https://localhost/api/health</code>)</li>
                         </ul>
                       </div>
                     </div>

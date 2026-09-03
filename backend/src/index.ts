@@ -268,7 +268,7 @@ function initDemoCache() {
 
 // Start Server & Init database schema
 app.listen(PORT, async () => {
-  console.log(`[CloudMon Backend] Server running on port ${PORT}`);
+  console.log(`[AllClear Backend] Server running on port ${PORT}`);
   await initDb();
   await syncBlackboxTargets();
   await seedDemoData(); // Auto-seed mock data on boot

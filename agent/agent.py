@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# CLOUDMON AGENT - MULTI-CLOUD LIGHTWEIGHT MONITORING
+# ALLCLEAR AGENT - MULTI-CLOUD LIGHTWEIGHT OBSERVABILITY
 # ==============================================================================
 # Requirements: Pure Python 3, standard library ONLY.
 # Safe for non-root execution. Parses /proc filesystem directly.
@@ -250,7 +250,7 @@ def send_report(url, token, payload, ca_bundle=None):
         return None, None
 
 def main():
-    log_info("Starting CloudMon Agent...")
+    log_info("Starting AllClear Agent...")
     config = load_config()
     
     api_url = config.get("api_url", "")
@@ -265,7 +265,7 @@ def main():
         
     # Enforce TLS-only connection security
     if not api_url.startswith("https://"):
-        log_error(f"Insecure API URL '{api_url}'. CloudMon Agent requires HTTPS endpoints to protect token credentials. Failing startup.")
+        log_error(f"Insecure API URL '{api_url}'. AllClear Agent requires HTTPS endpoints to protect token credentials. Failing startup.")
         sys.exit(1)
 
     retry_delay = 5

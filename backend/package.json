@@ -1,7 +1,7 @@
 {
-  "name": "cloudmon-backend",
-  "version": "1.0.0",
-  "description": "CloudMon MVP Backend Services",
+  "name": "allclear-backend",
+  "version": "1.1.0",
+  "description": "AllClear Multi-Cloud Observability & Status Signal Engine",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

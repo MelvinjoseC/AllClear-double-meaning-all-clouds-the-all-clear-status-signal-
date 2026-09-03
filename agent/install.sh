@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# CLOUDMON AGENT INSTALLER (Idempotent bash script)
+# ALLCLEAR AGENT INSTALLER (Idempotent bash script)
 # ==============================================================================
 # Setup steps:
 # 1. Parse command line flags (--url, --token, --server-id, etc.)
