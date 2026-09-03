@@ -127,6 +127,109 @@ def get_disk_usage():
         log_error(f"Failed to get disk usage: {e}")
     return 0, 0
 
+_prev_net_sample = {"time": 0.0, "rx": 0, "tx": 0}
+_prev_disk_sample = {"time": 0.0, "read": 0, "write": 0}
+
+def get_network_io():
+    """Parses /proc/net/dev for aggregated non-loopback network throughput."""
+    global _prev_net_sample
+    rx_bytes_total = 0
+    tx_bytes_total = 0
+    rx_errors_total = 0
+    tx_errors_total = 0
+    
+    try:
+        with open("/proc/net/dev", "r") as f:
+            lines = f.readlines()
+            for line in lines[2:]:  # Skip 2 header lines
+                if ":" not in line:
+                    continue
+                iface, data = line.split(":", 1)
+                iface = iface.strip()
+                if iface == "lo":
+                    continue
+                fields = data.split()
+                if len(fields) >= 16:
+                    rx_bytes = int(fields[0])
+                    rx_errs = int(fields[2])
+                    tx_bytes = int(fields[8])
+                    tx_errs = int(fields[10])
+                    rx_bytes_total += rx_bytes
+                    tx_bytes_total += tx_bytes
+                    rx_errors_total += rx_errs
+                    tx_errors_total += tx_errs
+    except Exception:
+        pass
+
+    now = time.time()
+    time_delta = now - _prev_net_sample["time"]
+    rx_rate_kbps = 0.0
+    tx_rate_kbps = 0.0
+
+    if _prev_net_sample["time"] > 0 and time_delta > 0:
+        rx_diff = rx_bytes_total - _prev_net_sample["rx"]
+        tx_diff = tx_bytes_total - _prev_net_sample["tx"]
+        if rx_diff >= 0:
+            rx_rate_kbps = round((rx_diff / time_delta) / 1024.0, 2)
+        if tx_diff >= 0:
+            tx_rate_kbps = round((tx_diff / time_delta) / 1024.0, 2)
+
+    _prev_net_sample = {"time": now, "rx": rx_bytes_total, "tx": tx_bytes_total}
+
+    return {
+        "rx_bytes": rx_bytes_total,
+        "tx_bytes": tx_bytes_total,
+        "rx_rate_kbps": rx_rate_kbps,
+        "tx_rate_kbps": tx_rate_kbps,
+        "rx_errors": rx_errors_total,
+        "tx_errors": tx_errors_total
+    }
+
+def get_disk_io():
+    """Parses /proc/diskstats for block device read/write throughput (sector size = 512 bytes)."""
+    global _prev_disk_sample
+    read_bytes_total = 0
+    write_bytes_total = 0
+
+    try:
+        with open("/proc/diskstats", "r") as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) >= 14:
+                    dev_name = parts[2]
+                    # Filter out partitions, loop, ram, dm devices
+                    if (dev_name.startswith("sd") or dev_name.startswith("vd") or 
+                        dev_name.startswith("nvme") or dev_name.startswith("xvd")):
+                        # field 5: sectors read, field 9: sectors written
+                        sectors_read = int(parts[5])
+                        sectors_written = int(parts[9])
+                        read_bytes_total += sectors_read * 512
+                        write_bytes_total += sectors_written * 512
+    except Exception:
+        pass
+
+    now = time.time()
+    time_delta = now - _prev_disk_sample["time"]
+    read_rate_kbps = 0.0
+    write_rate_kbps = 0.0
+
+    if _prev_disk_sample["time"] > 0 and time_delta > 0:
+        read_diff = read_bytes_total - _prev_disk_sample["read"]
+        write_diff = write_bytes_total - _prev_disk_sample["write"]
+        if read_diff >= 0:
+            read_rate_kbps = round((read_diff / time_delta) / 1024.0, 2)
+        if write_diff >= 0:
+            write_rate_kbps = round((write_diff / time_delta) / 1024.0, 2)
+
+    _prev_disk_sample = {"time": now, "read": read_bytes_total, "write": write_bytes_total}
+
+    return {
+        "read_bytes": read_bytes_total,
+        "write_bytes": write_bytes_total,
+        "read_rate_kbps": read_rate_kbps,
+        "write_rate_kbps": write_rate_kbps
+    }
+
 def get_system_uptime():
     """Reads system uptime from /proc/uptime"""
     try:
@@ -194,6 +297,8 @@ def build_metrics_payload(config):
     disk_total, disk_used = get_disk_usage()
     sys_uptime = get_system_uptime()
     process_uptimes = get_process_uptime(processes)
+    net_io = get_network_io()
+    disk_io = get_disk_io()
     
     mem_used = mem_total - mem_available
     mem_usage_pct = (mem_used / mem_total * 100.0) if mem_total > 0 else 0.0
@@ -210,6 +315,16 @@ def build_metrics_payload(config):
             "disk_used_bytes": disk_used,
             "disk_usage_percentage": round(disk_usage_pct, 2),
             "system_uptime_seconds": round(sys_uptime, 2),
+            "network_rx_bytes": net_io["rx_bytes"],
+            "network_tx_bytes": net_io["tx_bytes"],
+            "network_rx_rate_kbps": net_io["rx_rate_kbps"],
+            "network_tx_rate_kbps": net_io["tx_rate_kbps"],
+            "network_rx_errors": net_io["rx_errors"],
+            "network_tx_errors": net_io["tx_errors"],
+            "disk_read_bytes": disk_io["read_bytes"],
+            "disk_write_bytes": disk_io["write_bytes"],
+            "disk_read_rate_kbps": disk_io["read_rate_kbps"],
+            "disk_write_rate_kbps": disk_io["write_rate_kbps"],
             "processes": {k: round(v, 2) for k, v in process_uptimes.items()}
         }
     }
