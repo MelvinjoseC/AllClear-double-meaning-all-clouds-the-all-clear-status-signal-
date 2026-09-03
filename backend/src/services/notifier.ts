@@ -59,22 +59,47 @@ export function translateAlert(notification: AlertNotification): { message: stri
         message: `🚨 Your website [${monitoredItemName}] is loading slowly for visitors (response time at ${value || '3+'}s).`,
         action: 'Check server load, optimize static assets, or contact your hosting provider if this continues.'
       };
+    case 'HostHighMemory':
+      return {
+        message: `🚨 Your server [${monitoredItemName}] is using almost all RAM (Memory at ${value || '90+'}%).`,
+        action: 'Inspect memory consumption using top/htop or scale up server instance size.'
+      };
+    case 'HostDiskFillingFast':
+      return {
+        message: `⚠️ Storage on your server [${monitoredItemName}] is filling up rapidly.`,
+        action: 'Check recent log files, core dumps, or Docker storage to prevent full disk lockup.'
+      };
+    case 'HostHighNetworkErrors':
+      return {
+        message: `⚠️ Your server [${monitoredItemName}] is experiencing high network packet error rates.`,
+        action: 'Check network hardware, virtual interface configuration, or cloud network throughput quotas.'
+      };
+    case 'SSLCertExpiringSoon':
+      return {
+        message: `⚠️ The SSL certificate for [${monitoredItemName}] will expire in less than 14 days (${value || '14'} days remaining).`,
+        action: 'Renew your TLS certificate soon or verify Certbot / Let\'s Encrypt auto-renewal cron.'
+      };
+    case 'SSLCertExpiringCrit':
+      return {
+        message: `🚨 CRITICAL: The SSL certificate for [${monitoredItemName}] expires in less than 72 hours!`,
+        action: 'Renew certificate immediately to avoid security warnings in visitor browsers.'
+      };
     case 'AgentOffline':
       return {
         message: `🚨 We haven't heard from your server [${monitoredItemName}] in over a minute and a half.`,
-        action: 'Check if the server is running and the cloudmon-agent systemd service is active.'
+        action: 'Check if the server is running and the allclear-agent systemd service is active.'
       };
     default:
       return {
         message: `🚨 Alert [${alertName}] is firing on [${monitoredItemName}]. Value: ${value || 'N/A'}.`,
-        action: 'Inspect the system status on your CloudMon dashboard.'
+        action: 'Inspect the system status on your AllClear dashboard.'
       };
   }
 }
 
 export async function sendAlert(tenantId: string, email: string, whatsappNumber: string | null, notification: AlertNotification) {
   const { message, action } = translateAlert(notification);
-  const fullText = `CloudMon Notification:\n${message}\n\nSuggested Next Step:\n${action}`;
+  const fullText = `AllClear Notification:\n${message}\n\nSuggested Next Step:\n${action}`;
 
   // Log to debug alert log file
   const logEntry = `[${new Date().toISOString()}] Tenant: ${tenantId} | Email: ${email} | WhatsApp: ${whatsappNumber || 'None'}\n${fullText}\n----------------------------------------\n`;

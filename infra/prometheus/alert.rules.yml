@@ -60,3 +60,44 @@ groups:
         annotations:
           summary: "Agent has stopped reporting"
           description: "No heartbeat received in over 90 seconds."
+
+      # 7. Predictive Disk Space Fill Rate
+      - alert: HostDiskFillingFast
+        expr: deriv(cloudmon_disk_usage_percentage[30m]) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Server disk is filling up rapidly"
+          description: "Disk fill rate indicates potential storage exhaustion within hours."
+
+      # 8. High Network Error Rate
+      - alert: HostHighNetworkErrors
+        expr: increase(cloudmon_network_rx_errors[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Network interface is dropping packets"
+          description: "High packet error rate detected on server network interface."
+
+      # 9. SSL Certificate Expiring Soon (14-day warning)
+      - alert: SSLCertExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) < 86400 * 14
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL/TLS certificate expiring soon"
+          description: "Certificate for website expires in less than 14 days."
+
+      # 10. SSL Certificate Expiring Critical (3-day critical)
+      - alert: SSLCertExpiringCrit
+        expr: (probe_ssl_earliest_cert_expiry - time()) < 86400 * 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SSL/TLS certificate expiring within 72 hours"
+          description: "Immediate renewal required to avoid browser blocking."
+
