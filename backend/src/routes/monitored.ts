@@ -6,6 +6,7 @@ import https from 'https';
 import * as fs from 'fs';
 import pool, { withTenantClient, adminQuery } from '../db';
 import { CustomRequest, authenticateToken } from '../middleware/auth';
+import { inspectSslCertificate } from '../services/sslProber';
 
 const router = Router();
 const TARGETS_FILE = process.env.PROMETHEUS_TARGETS_FILE || '/etc/prometheus/blackbox_targets.json';
@@ -70,7 +71,7 @@ async function syncBlackboxTargets() {
 
 // POST /api/monitored-items (Register a server or URL)
 router.post('/', authenticateToken, async (req: CustomRequest, res: Response) => {
-  const { type, name, url, processes } = req.body;
+  const { type, name, url, processes, cloud_provider } = req.body;
   const user = req.user!;
 
   if (!type || !name || (type === 'url' && !url)) {
@@ -80,6 +81,9 @@ router.post('/', authenticateToken, async (req: CustomRequest, res: Response) =>
   if (type !== 'server' && type !== 'url') {
     return res.status(400).json({ error: 'Invalid monitoring type.' });
   }
+
+  const validCloudProviders = ['aws', 'gcp', 'azure', 'digitalocean', 'baremetal', 'other'];
+  const provider = validCloudProviders.includes(cloud_provider) ? cloud_provider : 'other';
 
   // 1. Enforce Starter Tier Limits
   try {
@@ -113,9 +117,9 @@ router.post('/', authenticateToken, async (req: CustomRequest, res: Response) =>
     const result = await withTenantClient(user.tenantId, async (client) => {
       // Create monitored item
       const itemRes = await client.query(
-        `INSERT INTO monitored_items (tenant_id, type, name, url, status, last_checked_at)
-         VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
-        [user.tenantId, type, name, type === 'url' ? url : null, type === 'url' ? 'green' : 'red'] // Servers start as red until agent checks in
+        `INSERT INTO monitored_items (tenant_id, type, name, url, cloud_provider, status, last_checked_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
+        [user.tenantId, type, name, type === 'url' ? url : null, provider, type === 'url' ? 'green' : 'red'] // Servers start as red until agent checks in
       );
       const item = itemRes.rows[0];
 
@@ -140,6 +144,34 @@ router.post('/', authenticateToken, async (req: CustomRequest, res: Response) =>
     // If it's a URL, update blackbox target definitions
     if (type === 'url') {
       await syncBlackboxTargets();
+
+      // Trigger automatic SSL inspection if HTTPS
+      if (url.startsWith('https://')) {
+        inspectSslCertificate(url).then(async (sslRes) => {
+          if (sslRes.success && sslRes.certInfo) {
+            try {
+              await adminQuery(
+                `INSERT INTO ssl_certificates (tenant_id, monitored_item_id, domain, issuer, valid_from, valid_to, days_remaining, status)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 ON CONFLICT (monitored_item_id) DO UPDATE
+                 SET issuer = EXCLUDED.issuer, valid_to = EXCLUDED.valid_to, days_remaining = EXCLUDED.days_remaining, status = EXCLUDED.status, last_checked_at = NOW()`,
+                [
+                  user.tenantId,
+                  result.item.id,
+                  sslRes.certInfo.domain,
+                  sslRes.certInfo.issuer,
+                  sslRes.certInfo.valid_from,
+                  sslRes.certInfo.valid_to,
+                  sslRes.certInfo.days_remaining,
+                  sslRes.certInfo.status
+                ]
+              );
+            } catch (err) {
+              console.error('[SSL Registration Error] Failed to cache certificate:', err);
+            }
+          }
+        });
+      }
     }
 
     if (type === 'server') {
@@ -221,6 +253,67 @@ router.delete('/:id', authenticateToken, async (req: CustomRequest, res: Respons
     }
 
     return res.status(200).json({ message: 'Monitored item deleted successfully.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// GET /api/monitored-items/:id/ssl (Inspect certificate details)
+router.get('/:id/ssl', authenticateToken, async (req: CustomRequest, res: Response) => {
+  const user = req.user!;
+  const { id } = req.params;
+
+  try {
+    const cert = await withTenantClient(user.tenantId, async (client) => {
+      const dbRes = await client.query(
+        'SELECT * FROM ssl_certificates WHERE monitored_item_id = $1',
+        [id]
+      );
+      return dbRes.rows[0];
+    });
+
+    if (!cert) {
+      return res.status(404).json({ error: 'No SSL certificate data recorded for this monitor.' });
+    }
+
+    return res.status(200).json(cert);
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// POST /api/monitored-items/:id/ssl/refresh (Force re-probe certificate)
+router.post('/:id/ssl/refresh', authenticateToken, async (req: CustomRequest, res: Response) => {
+  const user = req.user!;
+  const { id } = req.params;
+
+  try {
+    const item = await withTenantClient(user.tenantId, async (client) => {
+      const dbRes = await client.query('SELECT url FROM monitored_items WHERE id = $1', [id]);
+      return dbRes.rows[0];
+    });
+
+    if (!item || !item.url) {
+      return res.status(400).json({ error: 'Monitored item has no target URL or is not a website.' });
+    }
+
+    const sslRes = await inspectSslCertificate(item.url);
+    if (!sslRes.success || !sslRes.certInfo) {
+      return res.status(400).json({ error: sslRes.error || 'Failed to inspect SSL certificate.' });
+    }
+
+    const cert = sslRes.certInfo;
+    await withTenantClient(user.tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO ssl_certificates (tenant_id, monitored_item_id, domain, issuer, valid_from, valid_to, days_remaining, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (monitored_item_id) DO UPDATE
+         SET issuer = EXCLUDED.issuer, valid_to = EXCLUDED.valid_to, days_remaining = EXCLUDED.days_remaining, status = EXCLUDED.status, last_checked_at = NOW()`,
+        [user.tenantId, id, cert.domain, cert.issuer, cert.valid_from, cert.valid_to, cert.days_remaining, cert.status]
+      );
+    });
+
+    return res.status(200).json({ message: 'SSL certificate refreshed successfully.', cert });
   } catch (err) {
     return res.status(500).json({ error: 'Internal server error.' });
   }
