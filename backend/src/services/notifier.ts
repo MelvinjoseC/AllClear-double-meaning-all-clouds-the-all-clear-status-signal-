@@ -1,8 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import http from 'http';
+import https from 'https';
+import * as crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import twilio from 'twilio';
+import { adminQuery } from '../db';
 
 dotenv.config();
 
@@ -133,4 +137,193 @@ export async function sendAlert(tenantId: string, email: string, whatsappNumber:
   } else {
     console.log('[WhatsApp Mock] Twilio credentials not set or no client number. Falling back to logs.');
   }
+
+  // 3. Dispatch to Configured Multi-Channel Integrations (Slack, Discord, Webhooks)
+  try {
+    const channelsRes = await adminQuery(
+      'SELECT channel_type, config_json FROM notification_channels WHERE tenant_id = $1 AND is_enabled = true',
+      [tenantId]
+    );
+
+    for (const channel of channelsRes.rows) {
+      const config = channel.config_json || {};
+      if (channel.channel_type === 'slack' && config.webhook_url) {
+        await sendSlackAlert(config.webhook_url, notification);
+      } else if (channel.channel_type === 'discord' && config.webhook_url) {
+        await sendDiscordAlert(config.webhook_url, notification);
+      } else if (channel.channel_type === 'webhook' && config.url) {
+        await sendCustomWebhookAlert(config.url, config.secret, notification);
+      }
+    }
+  } catch (err) {
+    console.error('[Notification Channel Query Error]:', err);
+  }
+
+  // Fallback to environment variable webhooks if configured
+  if (process.env.SLACK_WEBHOOK_URL) {
+    await sendSlackAlert(process.env.SLACK_WEBHOOK_URL, notification);
+  }
+  if (process.env.DISCORD_WEBHOOK_URL) {
+    await sendDiscordAlert(process.env.DISCORD_WEBHOOK_URL, notification);
+  }
+}
+
+/**
+ * Low-level JSON HTTP/HTTPS POST helper with timeout
+ */
+export function postJson(
+  targetUrl: string,
+  body: any,
+  customHeaders: Record<string, string> = {}
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(targetUrl);
+      const reqLib = url.protocol === 'https:' ? https : http;
+      const data = JSON.stringify(body);
+      const req = reqLib.request(
+        targetUrl,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(data),
+            'User-Agent': 'AllClear-Notifier/1.1',
+            ...customHeaders,
+          },
+          timeout: 5000,
+        },
+        (res) => {
+          const ok = (res.statusCode || 500) < 400;
+          resolve(ok);
+        }
+      );
+      req.on('error', (err) => {
+        console.error(`[Notifier Error] Failed POST to ${targetUrl}:`, err.message);
+        resolve(false);
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(false);
+      });
+      req.write(data);
+      req.end();
+    } catch (e: any) {
+      console.error(`[Notifier Error] Malformed URL ${targetUrl}:`, e.message);
+      resolve(false);
+    }
+  });
+}
+
+/**
+ * Slack Block Kit Builder
+ */
+export function buildSlackPayload(notification: AlertNotification): any {
+  const { message, action } = translateAlert(notification);
+  const isResolved = notification.status === 'resolved';
+  const color = isResolved ? '#10b981' : notification.severity === 'critical' ? '#ef4444' : '#f59e0b';
+  const title = isResolved ? '✅ AllClear: Status Resolved' : '🚨 AllClear: System Alert';
+
+  return {
+    attachments: [
+      {
+        color,
+        blocks: [
+          {
+            type: 'header',
+            text: { type: 'plain_text', text: title, emoji: true },
+          },
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: `*Node:* \`${notification.monitoredItemName}\`\n${message}` },
+          },
+          {
+            type: 'section',
+            fields: [
+              { type: 'mrkdwn', text: `*Severity:*\n${notification.severity.toUpperCase()}` },
+              { type: 'mrkdwn', text: `*Status:*\n${notification.status.toUpperCase()}` },
+            ],
+          },
+          {
+            type: 'context',
+            elements: [
+              { type: 'mrkdwn', text: `💡 *Suggested Action:* ${action}` },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export async function sendSlackAlert(webhookUrl: string, notification: AlertNotification): Promise<boolean> {
+  const payload = buildSlackPayload(notification);
+  const ok = await postJson(webhookUrl, payload);
+  if (ok) console.log(`[Slack Dispatch] Alert successfully posted to Slack.`);
+  return ok;
+}
+
+/**
+ * Discord Rich Embed Builder
+ */
+export function buildDiscordPayload(notification: AlertNotification): any {
+  const { message, action } = translateAlert(notification);
+  const isResolved = notification.status === 'resolved';
+  const color = isResolved ? 0x10b981 : notification.severity === 'critical' ? 0xef4444 : 0xf59e0b;
+
+  return {
+    embeds: [
+      {
+        title: `[AllClear] ${isResolved ? '✅ Status Normal' : '🚨 Alert Triggered'} — ${notification.monitoredItemName}`,
+        description: message,
+        color,
+        fields: [
+          { name: 'Suggested Action', value: action, inline: false },
+          { name: 'Severity', value: notification.severity.toUpperCase(), inline: true },
+          { name: 'Status', value: notification.status.toUpperCase(), inline: true },
+          { name: 'Timestamp', value: new Date(notification.timestamp).toLocaleString(), inline: true },
+        ],
+        footer: { text: 'AllClear Multi-Cloud Observability Engine' },
+      },
+    ],
+  };
+}
+
+export async function sendDiscordAlert(webhookUrl: string, notification: AlertNotification): Promise<boolean> {
+  const payload = buildDiscordPayload(notification);
+  const ok = await postJson(webhookUrl, payload);
+  if (ok) console.log(`[Discord Dispatch] Alert successfully posted to Discord.`);
+  return ok;
+}
+
+/**
+ * Generic Custom Webhook Payload Builder with HMAC Signature support
+ */
+export function buildCustomWebhookPayload(notification: AlertNotification): any {
+  const { message, action } = translateAlert(notification);
+  return {
+    event: 'allclear.alert',
+    alert: notification,
+    human_readable: {
+      message,
+      suggested_action: action,
+    },
+    timestamp: new Date().toISOString(),
+  };
+}
+
+export async function sendCustomWebhookAlert(
+  webhookUrl: string,
+  secret: string | undefined,
+  notification: AlertNotification
+): Promise<boolean> {
+  const payload = buildCustomWebhookPayload(notification);
+  const headers: Record<string, string> = {};
+  if (secret) {
+    const signature = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+    headers['X-AllClear-Signature'] = `sha256=${signature}`;
+  }
+  const ok = await postJson(webhookUrl, payload, headers);
+  if (ok) console.log(`[Webhook Dispatch] Alert posted to custom webhook.`);
+  return ok;
 }
