@@ -94,7 +94,7 @@ jobs:
 
       - name: Lint AllClear Helm Chart
         run: |
-          helm lint deploy/helm/allclear/
+          helm lint infra/helm/allclear/
 
   docker-validation:
     name: Docker Configuration Validate

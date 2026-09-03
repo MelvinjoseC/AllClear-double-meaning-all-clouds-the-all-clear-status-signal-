@@ -2,11 +2,16 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: cloudmon-ingress
+  name: {{ .Release.Name }}-ingress
   annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | default "letsencrypt-prod" | quote }}
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
   rules:
     {{- range .Values.ingress.hosts }}
     - host: {{ .host | quote }}
@@ -16,14 +21,14 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: cloudmon-backend
+                name: {{ $.Release.Name }}-backend
                 port:
                   number: 5000
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: cloudmon-frontend
+                name: {{ $.Release.Name }}-frontend
                 port:
                   number: 80
     {{- end }}

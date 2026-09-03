@@ -1,5 +1,5 @@
 # ==============================================================================
-# CLOUDMON HELM VALUES
+# ALLCLEAR HELM VALUES
 # ==============================================================================
 
 global:
@@ -8,8 +8,14 @@ global:
 # --- Backend API Deployment Configurations ---
 backend:
   replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: 80
   image:
-    repository: ghcr.io/melvinjosec/cloudmon-backend
+    repository: ghcr.io/melvinjosec/allclear-backend
     tag: latest
     pullPolicy: Always
   service:
@@ -29,7 +35,7 @@ backend:
 frontend:
   replicaCount: 2
   image:
-    repository: ghcr.io/melvinjosec/cloudmon-frontend
+    repository: ghcr.io/melvinjosec/allclear-frontend
     tag: latest
     pullPolicy: Always
   service:
@@ -43,14 +49,19 @@ frontend:
       cpu: 50m
       memory: 64Mi
 
+# --- High Availability Pod Disruption Budgets ---
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
 # --- PostgreSQL StatefulSet Configurations ---
 postgres:
   image: postgres:16-alpine
   service:
     port: 5432
-  dbName: cloudmon
-  user: cloudmon_user
-  pass: cloudmon_db_pass_k8s_change_me
+  dbName: allclear
+  user: allclear_user
+  pass: allclear_db_pass_k8s_change_me
   persistence:
     size: 10Gi
   resources:
@@ -61,16 +72,22 @@ postgres:
       cpu: 250m
       memory: 256Mi
 
-# --- Ingress Controller Route Configuration ---
+# --- Ingress Controller & Cert-Manager Route Configuration ---
 ingress:
   enabled: true
   className: "nginx"
+  clusterIssuer: "letsencrypt-prod"
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false" # Set true if SSL is terminated at ingress
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
   hosts:
-    - host: cloudmon.local
+    - host: allclear.local
       paths:
         - path: /
           pathType: Prefix
         - path: /api
           pathType: Prefix
+  tls:
+    - secretName: allclear-tls-cert
+      hosts:
+        - allclear.local
