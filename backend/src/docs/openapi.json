@@ -1,0 +1,157 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AllClear Observability API",
+    "version": "2.0.0",
+    "description": "Enterprise-grade multi-cloud observability, telemetry ingestion, dynamic thresholds, and status signal platform."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Local development gateway"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "AgentToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Cryptographic token assigned to a monitored node agent"
+      }
+    },
+    "schemas": {
+      "MonitoredItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "tenant_id": { "type": "string", "format": "uuid" },
+          "type": { "type": "string", "enum": ["server", "url"] },
+          "name": { "type": "string" },
+          "url": { "type": "string", "nullable": true },
+          "cloud_provider": { "type": "string", "enum": ["aws", "gcp", "azure", "digitalocean", "baremetal", "other"] },
+          "environment": { "type": "string", "enum": ["production", "staging", "development"] },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "status": { "type": "string", "enum": ["green", "yellow", "red"] },
+          "last_checked_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AgentMetricsPayload": {
+        "type": "object",
+        "required": ["server_id", "metrics"],
+        "properties": {
+          "server_id": { "type": "string", "format": "uuid" },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "cpu_usage_percentage": { "type": "number" },
+              "memory_usage_percentage": { "type": "number" },
+              "disk_usage_percentage": { "type": "number" },
+              "system_uptime_seconds": { "type": "number" },
+              "network_rx_rate_kbps": { "type": "number" },
+              "network_tx_rate_kbps": { "type": "number" },
+              "tcp_connections": { "type": "object" },
+              "processes": { "type": "object" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check & Database Prober",
+        "responses": {
+          "200": { "description": "Platform is healthy and operational." }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Tenant User Authentication",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Returns signed JWT session token." }
+        }
+      }
+    },
+    "/api/monitored-items": {
+      "get": {
+        "summary": "List Monitored Servers and URLs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "environment", "in": "query", "schema": { "type": "string" } },
+          { "name": "provider", "in": "query", "schema": { "type": "string" } },
+          { "name": "tag", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of monitored items for the tenant."
+          }
+        }
+      },
+      "post": {
+        "summary": "Register New Server or URL Target",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Item created with agent registration token if server." }
+        }
+      }
+    },
+    "/api/agent/report": {
+      "post": {
+        "summary": "Submit Agent Telemetry Heartbeat",
+        "security": [{ "AgentToken": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AgentMetricsPayload" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Telemetry ingested and evaluated." }
+        }
+      }
+    },
+    "/api/audit-logs": {
+      "get": {
+        "summary": "Query Tenant Compliance Audit Trail",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Paginated audit events log." }
+        }
+      }
+    },
+    "/api/public/status/{tenantId}": {
+      "get": {
+        "summary": "Public Status Page Summary",
+        "parameters": [
+          { "name": "tenantId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Status overview and monitored component health." }
+        }
+      }
+    }
+  }
+}

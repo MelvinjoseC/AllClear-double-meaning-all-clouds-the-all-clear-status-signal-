@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import * as bcrypt from 'bcryptjs';
+import * as path from 'path';
+import * as fs from 'fs';
 import pool, { initDb, adminQuery } from './db';
 import authRoutes from './routes/auth';
 import monitoredRoutes, { syncBlackboxTargets } from './routes/monitored';
@@ -52,6 +54,48 @@ app.use('/api/', globalLimiter); // Applies to /api/monitored-items, /api/alerts
 // ==============================================================================
 // PUBLIC & INTERNAL ENDPOINTS
 // ==============================================================================
+
+// OpenAPI Specification & Interactive Documentation Viewer
+app.get('/api/docs/openapi.json', (req, res) => {
+  const specPath = path.join(__dirname, 'docs', 'openapi.json');
+  if (fs.existsSync(specPath)) {
+    return res.sendFile(specPath);
+  }
+  // Fallback for compiled dist structure where docs may reside in src
+  const srcSpecPath = path.join(__dirname, '..', 'src', 'docs', 'openapi.json');
+  if (fs.existsSync(srcSpecPath)) {
+    return res.sendFile(srcSpecPath);
+  }
+  return res.status(404).json({ error: 'OpenAPI specification not found' });
+});
+
+app.get('/api/docs', (req, res) => {
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>AllClear API Documentation</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+</head>
+<body style="margin: 0; background: #0f172a;">
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: '/api/docs/openapi.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis],
+      });
+    };
+  </script>
+</body>
+</html>`;
+  res.set('Content-Type', 'text/html');
+  res.send(html);
+});
 
 // 1. Dead-man's switch / Platform health checker (DB connection cache mitigation)
 let lastHealthCheck = 0;
