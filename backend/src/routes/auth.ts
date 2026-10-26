@@ -3,9 +3,10 @@ import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import pool, { adminQuery } from '../db';
 import { CustomRequest, authenticateToken } from '../middleware/auth';
+import config from '../config';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_mvp_change_me';
+const JWT_SECRET = config.auth.jwtSecret;
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {

@@ -12,10 +12,11 @@ import alertRoutes from './routes/alerts';
 import maintenanceRoutes from './routes/maintenance';
 import statusPageRoutes from './routes/statusPage';
 import auditRoutes from './routes/audit';
+import config from './config';
 import { CustomRequest } from './middleware/auth';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
 
 // Enable trusting proxy headers for rate limiting behind Nginx
 app.set('trust proxy', 1);
