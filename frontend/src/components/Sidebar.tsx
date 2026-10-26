@@ -10,6 +10,7 @@ interface SidebarProps {
   user: User | null;
   onLogout: () => void;
   onOpenSettings: () => void;
+  onOpenAuditLogs?: () => void;
   firingCount: number;
 }
 
@@ -19,6 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   user,
   onLogout,
   onOpenSettings,
+  onOpenAuditLogs,
   firingCount,
 }) => {
   return (
@@ -107,6 +109,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Globe className="w-4 h-4" />
             <span>Public Status Page</span>
           </button>
+
+          {onOpenAuditLogs && (
+            <button
+              onClick={onOpenAuditLogs}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm text-gray-400 hover:text-white hover:bg-darkCard transition-all"
+            >
+              <Shield className="w-4 h-4 text-purple-400" />
+              <span>Audit Trail</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -14,6 +14,7 @@ import { UrlCard } from './components/UrlCard';
 import { AlertHistoryTable } from './components/AlertHistoryTable';
 import { ChannelSettingsModal } from './components/ChannelSettingsModal';
 import { PublicStatusModal } from './components/PublicStatusModal';
+import { AuditLogViewer } from './components/AuditLogViewer';
 
 const API_BASE = '/api';
 
@@ -39,6 +40,7 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
   
   // Filtering
   const [cloudFilter, setCloudFilter] = useState('all');
@@ -470,6 +472,7 @@ export default function App() {
         user={user}
         onLogout={handleLogout}
         onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenAuditLogs={() => setShowAuditModal(true)}
         firingCount={firingCount}
       />
 
@@ -792,6 +795,13 @@ export default function App() {
         onClose={() => setShowStatusModal(false)}
         user={user}
         items={items}
+      />
+
+      {/* Compliance Audit Trail Modal */}
+      <AuditLogViewer
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        token={token || ''}
       />
     </div>
   );
