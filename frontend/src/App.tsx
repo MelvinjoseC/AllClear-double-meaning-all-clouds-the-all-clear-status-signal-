@@ -42,6 +42,7 @@ export default function App() {
   
   // Filtering
   const [cloudFilter, setCloudFilter] = useState('all');
+  const [envFilter, setEnvFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Auth Form State
@@ -324,7 +325,12 @@ export default function App() {
       matchesCloud = item.cloud_provider === cloudFilter;
     }
 
-    return matchesSearch && matchesCloud;
+    let matchesEnv = true;
+    if (envFilter !== 'all') {
+      matchesEnv = (item.environment || 'production') === envFilter;
+    }
+
+    return matchesSearch && matchesCloud && matchesEnv;
   });
 
   const filterCounts = {
@@ -534,6 +540,8 @@ export default function App() {
               <CloudFilterTabs
                 activeFilter={cloudFilter}
                 onChangeFilter={setCloudFilter}
+                activeEnv={envFilter}
+                onChangeEnv={setEnvFilter}
                 counts={filterCounts}
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
