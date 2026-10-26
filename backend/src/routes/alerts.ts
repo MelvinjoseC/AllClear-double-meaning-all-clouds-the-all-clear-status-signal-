@@ -1,20 +1,42 @@
 import { Router, Request, Response } from 'express';
 import pool, { adminQuery, withTenantClient } from '../db';
-import { sendAlert, AlertNotification } from '../services/notifier';
+import { sendAlert, AlertNotification, translateAlert } from '../services/notifier';
 import { CustomRequest, authenticateToken } from '../middleware/auth';
 import { isItemInMaintenance } from './maintenance';
 
 const router = Router();
 
-// POST /internal/alerts/webhook (Alertmanager ingestion endpoint - fully internal-only)
-router.post('/webhook', async (req: Request, res: Response) => {
-  const payload = req.body;
+export interface AlertmanagerV4Alert {
+  status: 'firing' | 'resolved';
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  startsAt: string;
+  endsAt?: string;
+  generatorURL?: string;
+  fingerprint?: string;
+}
 
-  if (!payload || !payload.alerts) {
-    return res.status(400).json({ error: 'Invalid Alertmanager payload' });
+export interface AlertmanagerWebhookPayload {
+  version?: string;
+  groupKey?: string;
+  status: 'firing' | 'resolved';
+  receiver?: string;
+  groupLabels?: Record<string, string>;
+  commonLabels?: Record<string, string>;
+  commonAnnotations?: Record<string, string>;
+  externalURL?: string;
+  alerts: AlertmanagerV4Alert[];
+}
+
+/**
+ * Common alert processing logic for Alertmanager webhooks.
+ */
+async function processAlertmanagerPayload(payload: AlertmanagerWebhookPayload, res: Response) {
+  if (!payload || !payload.alerts || !Array.isArray(payload.alerts)) {
+    return res.status(400).json({ error: 'Invalid Alertmanager payload: alerts array is required.' });
   }
 
-  console.log(`[ALERT MANAGER WEBHOOK] Received ${payload.alerts.length} alert notifications.`);
+  console.log(`[ALERT MANAGER WEBHOOK] Ingested ${payload.alerts.length} alert notifications from Alertmanager.`);
 
   for (const alert of payload.alerts) {
     const labels = alert.labels || {};
@@ -46,7 +68,6 @@ router.post('/webhook', async (req: Request, res: Response) => {
       // Determine value to display (e.g. CPU %, response time, etc.)
       let value = '';
       if (alert.annotations && alert.annotations.description) {
-        // Parse a value if present in description (e.g. "CPU usage is 94.20%")
         const match = alert.annotations.description.match(/(\d+(\.\d+)?)/);
         if (match) value = match[1];
       }
@@ -82,7 +103,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
         timestamp: endsAt || startsAt
       };
 
-      const { message, action } = require('../services/notifier').translateAlert(notification);
+      const { message, action } = translateAlert(notification);
 
       if (status === 'firing') {
         // Check if item is in active maintenance window
@@ -109,7 +130,6 @@ router.post('/webhook', async (req: Request, res: Response) => {
         );
 
         // Update monitored item status
-        // Critical alerts turn red, warnings turn yellow
         const newStatus = severity === 'critical' ? 'red' : 'yellow';
         await adminQuery(
           'UPDATE monitored_items SET status = $1, last_checked_at = NOW() WHERE id = $2',
@@ -132,7 +152,6 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
         let finalStatus = 'green';
         if (activeAlerts.rows.length > 0) {
-          // If there are still active alerts, set to the highest severity remaining
           const hasCritical = activeAlerts.rows.some(a => a.severity === 'critical');
           finalStatus = hasCritical ? 'red' : 'yellow';
         }
@@ -152,6 +171,16 @@ router.post('/webhook', async (req: Request, res: Response) => {
   }
 
   return res.status(200).json({ status: 'ok' });
+}
+
+// POST /internal/alerts/webhook (Alertmanager ingestion endpoint - fully internal-only)
+router.post('/webhook', async (req: Request, res: Response) => {
+  return processAlertmanagerPayload(req.body, res);
+});
+
+// POST /api/alerts/webhook/alertmanager (Explicit Prometheus Alertmanager v4 webhook ingress)
+router.post('/webhook/alertmanager', async (req: Request, res: Response) => {
+  return processAlertmanagerPayload(req.body, res);
 });
 
 // GET /api/alerts/history (Retrieve plain-English log for current tenant)

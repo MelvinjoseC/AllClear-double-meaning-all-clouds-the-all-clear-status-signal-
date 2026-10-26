@@ -141,6 +141,7 @@ app.use('/api/monitored-items', monitoredRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/maintenance-windows', maintenanceRoutes);
 app.use('/api/audit-logs', auditRoutes);
+app.use('/api/alerts', alertRoutes);
 app.use('/api/public', statusPageRoutes);
 app.use('/internal/alerts', alertRoutes); // Mounted as internal-only
 
