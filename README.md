@@ -7,12 +7,13 @@
 [![CI Pipeline](https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-/actions/workflows/ci.yml/badge.svg)](https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-/actions/workflows/ci.yml)
 [![CodeQL Security](https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-/actions/workflows/codeql.yml/badge.svg)](https://github.com/MelvinjoseC/AllClear-double-meaning-all-clouds-/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Helm Chart: v1.1.0](https://img.shields.io/badge/Helm-v1.1.0-326CE5.svg?logo=helm&logoColor=white)](infra/helm/allclear)
+[![Helm Chart: v2.0.0](https://img.shields.io/badge/Helm-v2.0.0-326CE5.svg?logo=helm&logoColor=white)](infra/helm/allclear)
+[![API Docs: OpenAPI 3.0](https://img.shields.io/badge/API_Docs-OpenAPI_3.0-blueviolet.svg)](backend/src/docs/openapi.json)
 [![Status Badge](https://img.shields.io/badge/AllClear-Operational-10b981.svg)](ARCHITECTURE.md)
 
 <p align="center">
   <b>A production-grade, multi-tenant observability platform built for modern multi-cloud estates.</b><br/>
-  Zero-dependency telemetry agents, PostgreSQL Row-Level Security (RLS) isolation, background TLS probers, multi-channel dispatchers (Slack, Discord, Telegram, WhatsApp, Webhooks), and human-first incident translations.
+  Zero-dependency telemetry agents with offline ring buffers, PostgreSQL Row-Level Security (RLS) isolation, dynamic threshold engines, compliance audit trails, TLS security grading, multi-channel dispatchers (Slack, Discord, Telegram, PagerDuty, MS Teams, WhatsApp, Webhooks), and human-first incident translations.
 </p>
 
 </div>

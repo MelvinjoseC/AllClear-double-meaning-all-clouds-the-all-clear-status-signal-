@@ -24,9 +24,11 @@ flowchart TD
     subgraph "AllClear Control Plane"
         API["AllClear Express API<br/>(Node.js / TypeScript)"]
         RLS["PostgreSQL 16 Database<br/>(Row Level Security Isolation)"]
+        AUDIT["Audit Trail Engine<br/>(RLS-Protected Compliance Trail)"]
+        THRESH["Dynamic Threshold Engine<br/>(Tenant & Node Overrides)"]
         PROM["Prometheus TSDB<br/>(Scraping & Metric Storage)"]
         AM["Prometheus Alertmanager<br/>(Deduplication & Routing)"]
-        SSL["TLS Handshake Prober<br/>(SSL Certificate Inspector)"]
+        SSL["TLS Handshake & SAN Prober<br/>(A+ to F Security Grading)"]
         TRANS["Human-First Translation Engine<br/>(Plain English Alerts)"]
     end
 
@@ -34,6 +36,8 @@ flowchart TD
         SLACK["Slack (Block Kit)"]
         DISCORD["Discord (Rich Embeds)"]
         TG["Telegram (HTML Bot)"]
+        PD["PagerDuty (Events API v2)"]
+        TEAMS["MS Teams (Adaptive Cards)"]
         WA["WhatsApp (Twilio API)"]
         HOOK["Custom Webhooks (HMAC-SHA256)"]
     end

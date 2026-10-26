@@ -18,7 +18,7 @@ import random
 import urllib.request
 import urllib.error
 
-AGENT_VERSION = "1.1.0"
+AGENT_VERSION = "2.0.0"
 CONFIG_PATH = "/etc/cloudmon-agent.conf"
 
 class TelemetryRingBuffer:

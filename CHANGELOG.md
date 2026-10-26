@@ -5,6 +5,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2.0.0] - 2026-10-26
+
+### 🚀 Added
+- **eBPF-Style Socket Connection Tracing**: Linux `/proc/net/tcp` socket table parser tracking `ESTABLISHED`, `TIME_WAIT`, `CLOSE_WAIT`, and `LISTEN` connections to prevent port exhaustion.
+- **Resilient Offline Telemetry Ring Buffer**: Bounded circular memory buffer in agent caching metrics during network partitions and replaying with exponential backoff and jitter upon link restoration.
+- **Dynamic Metric Alert Threshold Engine**: Per-tenant and per-node custom thresholds for CPU, RAM, Disk, packet errors, and socket limits with immediate status transitions.
+- **Tamper-Evident Compliance Audit Logging**: Dedicated `audit_logs` table protected with PostgreSQL Row Level Security (RLS) tracking administrative actions, agent revocations, and configuration changes.
+- **Prometheus Alertmanager v4 Webhook Ingress**: Dedicated `/api/alerts/webhook/alertmanager` receiver translating raw Alertmanager JSON payloads into plain-English incident events.
+- **PagerDuty & Microsoft Teams Dispatchers**:
+  - PagerDuty Events API v2 integration with automated incident deduplication keys and escalation routing.
+  - Microsoft Teams Adaptive Card v1.4 builder with color-coded severity headers, node metadata facts, and action links.
+- **TLS/SSL Security Grade Inspector**: Calculates standard A+ to F security compliance grades based on TLS protocol (TLS 1.2/1.3), cipher suites, and multi-domain Subject Alternative Names (SANs).
+- **Environment Tier Filtering**: Multi-dimensional filtering by Cloud Provider AND Environment tier (Production, Staging, Development).
+- **OpenAPI 3.0 / Swagger Interactive Documentation**: Interactive OpenAPI explorer hosted at `/api/docs` documenting all platform endpoints, parameters, and schemas.
+- **Graceful Process Shutdown & Pool Telemetry**: `SIGTERM`/`SIGINT` lifecycle draining in-flight HTTP requests and safely terminating PostgreSQL pool connections.
+- **Typed Configuration Module**: Centralized `config/index.ts` with strict production validation rules for JWT secrets, timeouts, and connection pool limits.
+- **Accessible Incident Audio Chimes & Preferences**: Built-in Web Audio API synthesizers for acoustic incident warnings and persistent notification preferences.
+- **Kubernetes Cloud-Native Hardening**: Added Prometheus Operator `ServiceMonitor` and zero-trust `NetworkPolicy` templates.
+- **Expanded Grafana & Prometheus Rules**: Alerting rules for socket exhaustion and packet drops, plus Grafana panels for socket states and interface error rates.
+
+### 🔄 Changed
+- Expanded automated test coverage across Python agent and TypeScript backend test suites.
+- Upgraded platform API version to `v2.0.0`.
+
+---
+
 ## [1.1.0] - 2026-09-03
 
 ### 🚀 Added
