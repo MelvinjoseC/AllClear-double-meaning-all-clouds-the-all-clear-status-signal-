@@ -11,6 +11,33 @@ export interface SslCertInfo {
   status: 'valid' | 'expiring_soon' | 'expired' | 'error';
   authorized: boolean;
   authorizationError?: string;
+  protocol?: string;
+  cipher?: string;
+  sans?: string[];
+  security_grade?: 'A+' | 'A' | 'B' | 'C' | 'F';
+}
+
+/**
+ * Calculates a standard SSL/TLS compliance security letter grade.
+ */
+export function calculateSslSecurityGrade(
+  authorized: boolean,
+  daysRemaining: number,
+  protocol: string = 'TLSv1.2'
+): 'A+' | 'A' | 'B' | 'C' | 'F' {
+  if (!authorized || daysRemaining <= 0) {
+    return 'F';
+  }
+  if (daysRemaining <= 7) {
+    return 'C';
+  }
+  if (protocol === 'TLSv1.3' && daysRemaining > 30) {
+    return 'A+';
+  }
+  if ((protocol === 'TLSv1.3' || protocol === 'TLSv1.2') && daysRemaining > 14) {
+    return 'A';
+  }
+  return 'B';
 }
 
 export function inspectSslCertificate(
@@ -47,6 +74,9 @@ export function inspectSslCertificate(
           const peerCert = socket.getPeerCertificate();
           const authorized = socket.authorized;
           const authError = socket.authorizationError?.message;
+          const protocol = socket.getProtocol() || 'TLSv1.2';
+          const cipherInfo = socket.getCipher();
+          const cipherName = cipherInfo?.name || 'Unknown';
 
           socket.end();
 
@@ -72,6 +102,20 @@ export function inspectSslCertificate(
           const issuerOrg = toStr(peerCert.issuer?.O) || toStr(peerCert.issuer?.CN) || 'Unknown CA';
           const subjectName = toStr(peerCert.subject?.CN) || hostname;
 
+          // Parse Subject Alternative Names (SANs)
+          const sans: string[] = [];
+          if (peerCert.subjectaltname) {
+            const rawSans = peerCert.subjectaltname.split(',');
+            for (const item of rawSans) {
+              const cleaned = item.trim().replace(/^DNS:/i, '');
+              if (cleaned && !sans.includes(cleaned)) {
+                sans.push(cleaned);
+              }
+            }
+          }
+
+          const securityGrade = calculateSslSecurityGrade(authorized, daysRemaining, protocol);
+
           resolve({
             success: true,
             certInfo: {
@@ -84,6 +128,10 @@ export function inspectSslCertificate(
               status,
               authorized,
               authorizationError: authError,
+              protocol,
+              cipher: cipherName,
+              sans,
+              security_grade: securityGrade,
             },
           });
         } catch (err: any) {
