@@ -18,6 +18,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   const [telegramToken, setTelegramToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [customWebhookUrl, setCustomWebhookUrl] = useState('');
+  const [pagerDutyRoutingKey, setPagerDutyRoutingKey] = useState('');
+  const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [testSent, setTestSent] = useState<string | null>(null);
 
@@ -181,6 +183,62 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               placeholder="https://api.yourdomain.com/webhooks/allclear"
               value={customWebhookUrl}
               onChange={(e) => setCustomWebhookUrl(e.target.value)}
+              className="w-full bg-darkCard border border-darkBorder rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 font-mono"
+            />
+          </div>
+
+          {/* PagerDuty Integration */}
+          <div className="bg-[#0b0f19] border border-darkBorder rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">📟</span>
+                <div>
+                  <h4 className="text-sm font-bold text-white">PagerDuty Events API v2</h4>
+                  <p className="text-[11px] text-gray-400">Trigger, acknowledge, and resolve on-call incident escalations.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTestPing('PagerDuty')}
+                className="px-3 py-1 bg-darkBorder/50 hover:bg-darkBorder text-gray-300 hover:text-white text-xs rounded-lg transition-all flex items-center gap-1.5"
+              >
+                <Send className="w-3 h-3" />
+                <span>{testSent === 'PagerDuty' ? 'Sent!' : 'Test'}</span>
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="PagerDuty Integration / Routing Key (32-character hex)"
+              value={pagerDutyRoutingKey}
+              onChange={(e) => setPagerDutyRoutingKey(e.target.value)}
+              className="w-full bg-darkCard border border-darkBorder rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 font-mono"
+            />
+          </div>
+
+          {/* Microsoft Teams Integration */}
+          <div className="bg-[#0b0f19] border border-darkBorder rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">👥</span>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Microsoft Teams Adaptive Cards</h4>
+                  <p className="text-[11px] text-gray-400">Deliver structured visual cards to your MS Teams engineering channel.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTestPing('Microsoft Teams')}
+                className="px-3 py-1 bg-darkBorder/50 hover:bg-darkBorder text-gray-300 hover:text-white text-xs rounded-lg transition-all flex items-center gap-1.5"
+              >
+                <Send className="w-3 h-3" />
+                <span>{testSent === 'Microsoft Teams' ? 'Sent!' : 'Test'}</span>
+              </button>
+            </div>
+            <input
+              type="url"
+              placeholder="https://outlook.office.com/webhook/..."
+              value={teamsWebhookUrl}
+              onChange={(e) => setTeamsWebhookUrl(e.target.value)}
               className="w-full bg-darkCard border border-darkBorder rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 font-mono"
             />
           </div>

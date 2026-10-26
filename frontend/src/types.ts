@@ -1,4 +1,6 @@
 export type CloudProvider = 'aws' | 'gcp' | 'azure' | 'digitalocean' | 'baremetal' | 'other';
+export type Environment = 'production' | 'staging' | 'development';
+export type ChannelType = 'slack' | 'discord' | 'telegram' | 'webhook' | 'whatsapp' | 'email' | 'pagerduty' | 'msteams';
 
 export interface MonitoredItem {
   id: string;
@@ -7,6 +9,8 @@ export interface MonitoredItem {
   name: string;
   url: string | null;
   cloud_provider?: CloudProvider;
+  environment?: Environment;
+  tags?: string[];
   status: 'green' | 'yellow' | 'red';
   last_checked_at: string | null;
   uptime_percentage: string;
@@ -59,6 +63,10 @@ export interface SslCertInfo {
   days_remaining: number;
   status: 'valid' | 'expiring_soon' | 'expired' | 'error';
   last_checked_at?: string;
+  protocol?: string;
+  cipher?: string;
+  sans?: string[];
+  security_grade?: 'A+' | 'A' | 'B' | 'C' | 'F';
 }
 
 export interface MaintenanceWindow {
@@ -78,7 +86,19 @@ export interface NotificationChannel {
   id: string;
   tenant_id: string;
   name: string;
-  channel_type: 'slack' | 'discord' | 'telegram' | 'webhook' | 'whatsapp' | 'email';
+  channel_type: ChannelType;
   config_json: Record<string, any>;
   is_enabled: boolean;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  tenant_id: string;
+  actor_email: string;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  details: Record<string, any>;
+  ip_address: string;
+  created_at: string;
 }
