@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import pool, { withTenantClient, adminQuery } from '../db';
 import { CustomRequest, authenticateToken } from '../middleware/auth';
 import { inspectSslCertificate } from '../services/sslProber';
+import { auditRequest } from '../middleware/audit';
 
 const router = Router();
 const TARGETS_FILE = process.env.PROMETHEUS_TARGETS_FILE || '/etc/prometheus/blackbox_targets.json';
@@ -174,6 +175,8 @@ router.post('/', authenticateToken, async (req: CustomRequest, res: Response) =>
       }
     }
 
+    await auditRequest(req, 'CREATE_MONITORED_ITEM', type, result.item.id, { name, provider });
+
     if (type === 'server') {
       // Build curl installation command
       const installCommand = `curl -sSL https://localhost/api/agent/install.sh?token=${result.rawToken}&server_id=${result.item.id} | sudo bash`;
@@ -251,6 +254,8 @@ router.delete('/:id', authenticateToken, async (req: CustomRequest, res: Respons
     if (deleted.type === 'url') {
       await syncBlackboxTargets();
     }
+
+    await auditRequest(req, 'DELETE_MONITORED_ITEM', deleted.type, deleted.id, { name: deleted.name });
 
     return res.status(200).json({ message: 'Monitored item deleted successfully.' });
   } catch (err) {

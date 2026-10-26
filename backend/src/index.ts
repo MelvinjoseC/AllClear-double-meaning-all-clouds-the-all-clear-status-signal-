@@ -9,6 +9,7 @@ import agentRoutes, { metricsCache } from './routes/agent';
 import alertRoutes from './routes/alerts';
 import maintenanceRoutes from './routes/maintenance';
 import statusPageRoutes from './routes/statusPage';
+import auditRoutes from './routes/audit';
 import { CustomRequest } from './middleware/auth';
 
 const app = express();
@@ -139,6 +140,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/monitored-items', monitoredRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/maintenance-windows', maintenanceRoutes);
+app.use('/api/audit-logs', auditRoutes);
 app.use('/api/public', statusPageRoutes);
 app.use('/internal/alerts', alertRoutes); // Mounted as internal-only
 
