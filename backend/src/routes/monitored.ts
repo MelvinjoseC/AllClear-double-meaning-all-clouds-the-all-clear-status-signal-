@@ -72,7 +72,7 @@ async function syncBlackboxTargets() {
 
 // POST /api/monitored-items (Register a server or URL)
 router.post('/', authenticateToken, async (req: CustomRequest, res: Response) => {
-  const { type, name, url, processes, cloud_provider } = req.body;
+  const { type, name, url, processes, cloud_provider, environment = 'production', tags = [] } = req.body;
   const user = req.user!;
 
   if (!type || !name || (type === 'url' && !url)) {
@@ -85,6 +85,9 @@ router.post('/', authenticateToken, async (req: CustomRequest, res: Response) =>
 
   const validCloudProviders = ['aws', 'gcp', 'azure', 'digitalocean', 'baremetal', 'other'];
   const provider = validCloudProviders.includes(cloud_provider) ? cloud_provider : 'other';
+
+  const validEnvironments = ['production', 'staging', 'development'];
+  const env = validEnvironments.includes(environment) ? environment : 'production';
 
   // 1. Enforce Starter Tier Limits
   try {
@@ -118,9 +121,9 @@ router.post('/', authenticateToken, async (req: CustomRequest, res: Response) =>
     const result = await withTenantClient(user.tenantId, async (client) => {
       // Create monitored item
       const itemRes = await client.query(
-        `INSERT INTO monitored_items (tenant_id, type, name, url, cloud_provider, status, last_checked_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
-        [user.tenantId, type, name, type === 'url' ? url : null, provider, type === 'url' ? 'green' : 'red'] // Servers start as red until agent checks in
+        `INSERT INTO monitored_items (tenant_id, type, name, url, cloud_provider, environment, tags, status, last_checked_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
+        [user.tenantId, type, name, type === 'url' ? url : null, provider, env, tags, type === 'url' ? 'green' : 'red'] // Servers start as red until agent checks in
       );
       const item = itemRes.rows[0];
 
@@ -198,15 +201,66 @@ router.post('/', authenticateToken, async (req: CustomRequest, res: Response) =>
   }
 });
 
-// GET /api/monitored-items (List items for current tenant)
+// GET /api/monitored-items (List items for current tenant with optional environment, tag, or provider filtering)
 router.get('/', authenticateToken, async (req: CustomRequest, res: Response) => {
   const user = req.user!;
+  const { environment, tag, provider } = req.query;
   try {
     const items = await withTenantClient(user.tenantId, async (client) => {
-      const res = await client.query('SELECT * FROM monitored_items ORDER BY created_at DESC');
+      let query = 'SELECT * FROM monitored_items WHERE 1=1';
+      const params: any[] = [];
+
+      if (environment && environment !== 'all') {
+        params.push(environment);
+        query += ` AND environment = $${params.length}`;
+      }
+      if (provider && provider !== 'all') {
+        params.push(provider);
+        query += ` AND cloud_provider = $${params.length}`;
+      }
+      if (tag) {
+        params.push(tag);
+        query += ` AND $${params.length} = ANY(tags)`;
+      }
+
+      query += ' ORDER BY created_at DESC';
+      const res = await client.query(query, params);
       return res.rows;
     });
     return res.status(200).json(items);
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// PATCH /api/monitored-items/:id/tags (Update server metadata tags)
+router.patch('/:id/tags', authenticateToken, async (req: CustomRequest, res: Response) => {
+  const user = req.user!;
+  const { id } = req.params;
+  const { tags = [], environment } = req.body;
+
+  try {
+    const updated = await withTenantClient(user.tenantId, async (client) => {
+      let query = 'UPDATE monitored_items SET tags = $1';
+      const params: any[] = [tags];
+
+      if (environment) {
+        params.push(environment);
+        query += `, environment = $${params.length}`;
+      }
+
+      params.push(id);
+      query += ` WHERE id = $${params.length} RETURNING *`;
+
+      const res = await client.query(query, params);
+      return res.rows[0];
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Item not found or unauthorized.' });
+    }
+
+    return res.status(200).json({ status: 'success', item: updated });
   } catch (err) {
     return res.status(500).json({ error: 'Internal server error.' });
   }
