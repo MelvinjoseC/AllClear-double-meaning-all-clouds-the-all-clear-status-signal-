@@ -17,6 +17,15 @@ interface AgentMetrics {
   disk_used_bytes: number;
   disk_usage_percentage: number;
   system_uptime_seconds: number;
+  network_rx_errors?: number;
+  network_tx_errors?: number;
+  tcp_connections?: {
+    established?: number;
+    time_wait?: number;
+    close_wait?: number;
+    listen?: number;
+    total?: number;
+  };
   processes: Record<string, number>;
   last_seen: number;
 }
@@ -118,6 +127,9 @@ router.post('/report', agentReportLimiter, async (req: Request, res: Response) =
         disk_used_bytes: metrics.disk_used_bytes,
         disk_usage_percentage: metrics.disk_usage_percentage,
         system_uptime_seconds: metrics.system_uptime_seconds,
+        network_rx_errors: metrics.network_rx_errors,
+        network_tx_errors: metrics.network_tx_errors,
+        tcp_connections: metrics.tcp_connections,
         processes: metrics.processes || {},
         last_seen: Math.floor(Date.now() / 1000)
       }

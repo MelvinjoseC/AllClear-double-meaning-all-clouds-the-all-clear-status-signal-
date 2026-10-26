@@ -183,6 +183,19 @@ app.get('/internal/metrics', (req, res) => {
     for (const [procName, uptime] of Object.entries(entry.metrics.processes)) {
       lines.push(`cloudmon_process_uptime_seconds{${labels},process_name="${procName}"} ${uptime}`);
     }
+
+    if (entry.metrics.tcp_connections) {
+      const conns = entry.metrics.tcp_connections;
+      lines.push(`cloudmon_tcp_connections_total{${labels}} ${conns.total || 0}`);
+      lines.push(`cloudmon_tcp_connections{${labels},state="established"} ${conns.established || 0}`);
+      lines.push(`cloudmon_tcp_connections{${labels},state="time_wait"} ${conns.time_wait || 0}`);
+      lines.push(`cloudmon_tcp_connections{${labels},state="close_wait"} ${conns.close_wait || 0}`);
+      lines.push(`cloudmon_tcp_connections{${labels},state="listen"} ${conns.listen || 0}`);
+    }
+
+    if (entry.metrics.network_rx_errors !== undefined) {
+      lines.push(`cloudmon_network_rx_errors{${labels}} ${entry.metrics.network_rx_errors}`);
+    }
   }
 
   res.set('Content-Type', 'text/plain; version=0.0.4');

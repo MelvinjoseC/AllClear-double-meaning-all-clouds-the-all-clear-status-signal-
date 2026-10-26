@@ -101,3 +101,33 @@ groups:
           summary: "SSL/TLS certificate expiring within 72 hours"
           description: "Immediate renewal required to avoid browser blocking."
 
+      # 11. TCP Sockets Saturation
+      - alert: HostTcpSocketExhaustion
+        expr: cloudmon_tcp_connections_total > 5000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server TCP connection table near saturation"
+          description: "High number of active TCP sockets ({{ $value }}) risking connection refusal."
+
+      # 12. TIME_WAIT Sockets Accumulation
+      - alert: HostTimeWaitAccumulation
+        expr: cloudmon_tcp_connections{state="time_wait"} > 2500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of sockets in TIME_WAIT state"
+          description: "TCP port exhaustion warning: {{ $value }} sockets in TIME_WAIT."
+
+      # 13. Network Packet Drops
+      - alert: HostNetworkPacketDrops
+        expr: rate(cloudmon_network_rx_errors[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Network interface is sustaining packet drops"
+          description: "Sustained RX/TX packet drop rate on network interface."
+
