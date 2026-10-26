@@ -41,6 +41,15 @@ export default function App() {
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(
+    () => localStorage.getItem('allclear_sound') === 'true'
+  );
+
+  const toggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    localStorage.setItem('allclear_sound', String(next));
+  };
   
   // Filtering
   const [cloudFilter, setCloudFilter] = useState('all');
@@ -473,6 +482,8 @@ export default function App() {
         onLogout={handleLogout}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenAuditLogs={() => setShowAuditModal(true)}
+        soundEnabled={soundEnabled}
+        onToggleSound={toggleSound}
         firingCount={firingCount}
       />
 

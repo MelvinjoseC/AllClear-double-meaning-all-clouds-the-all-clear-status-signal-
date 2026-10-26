@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Shield, Activity, Clock, Settings, LogOut, Globe, Bell, Calendar
+  Shield, Activity, Clock, Settings, LogOut, Globe, Bell, Calendar, Volume2, VolumeX
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -11,6 +11,8 @@ interface SidebarProps {
   onLogout: () => void;
   onOpenSettings: () => void;
   onOpenAuditLogs?: () => void;
+  soundEnabled?: boolean;
+  onToggleSound?: () => void;
   firingCount: number;
 }
 
@@ -21,6 +23,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   onOpenSettings,
   onOpenAuditLogs,
+  soundEnabled = false,
+  onToggleSound,
   firingCount,
 }) => {
   return (
@@ -131,6 +135,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
         <div className="flex items-center gap-2">
+          {onToggleSound && (
+            <button
+              onClick={onToggleSound}
+              title={soundEnabled ? 'Incident audio chime enabled' : 'Incident audio chime muted'}
+              className={`p-2 bg-darkCard border border-darkBorder hover:border-gray-600 rounded-xl transition-all ${
+                soundEnabled ? 'text-blue-400' : 'text-gray-500'
+              }`}
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+          )}
           <button
             onClick={onOpenSettings}
             title="Settings"
