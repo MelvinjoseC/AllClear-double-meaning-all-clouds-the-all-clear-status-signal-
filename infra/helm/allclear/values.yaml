@@ -91,3 +91,15 @@ ingress:
     - secretName: allclear-tls-cert
       hosts:
         - allclear.local
+
+# --- Prometheus Operator ServiceMonitor ---
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+
+# --- Kubernetes Zero-Trust Network Policy ---
+networkPolicy:
+  enabled: false
