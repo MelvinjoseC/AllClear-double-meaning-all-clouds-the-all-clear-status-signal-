@@ -117,7 +117,16 @@ app.get('/health', async (req, res) => {
     await adminQuery('SELECT 1');
     cachedHealthResult = true;
     lastHealthCheck = now;
-    return res.status(200).json({ status: 'ok', cached: false });
+    return res.status(200).json({
+      status: 'ok',
+      cached: false,
+      pool: {
+        total: pool.totalCount,
+        idle: pool.idleCount,
+        waiting: pool.waitingCount,
+      },
+      uptime: Math.floor(process.uptime()),
+    });
   } catch (err) {
     console.error('[Health Check Error] Database query failed:', err);
     cachedHealthResult = false;
@@ -318,9 +327,36 @@ function initDemoCache() {
 }
 
 // Start Server & Init database schema
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   console.log(`[AllClear Backend] Server running on port ${PORT}`);
   await initDb();
   await syncBlackboxTargets();
   await seedDemoData(); // Auto-seed mock data on boot
 });
+
+// Graceful Shutdown Handler
+function handleGracefulShutdown(signal: string) {
+  console.log(`[Lifecycle] Received ${signal}. Starting graceful shutdown...`);
+
+  // Force shutdown after timeout in case of hanging connections
+  const forceTimer = setTimeout(() => {
+    console.error('[Lifecycle] Graceful shutdown timeout reached. Forcing process exit.');
+    process.exit(1);
+  }, 10000);
+  forceTimer.unref();
+
+  server.close(async () => {
+    console.log('[Lifecycle] HTTP listener closed. Draining database connection pool...');
+    try {
+      await pool.end();
+      console.log('[Lifecycle] PostgreSQL connection pool terminated cleanly.');
+      process.exit(0);
+    } catch (err) {
+      console.error('[Lifecycle] Error closing database pool:', err);
+      process.exit(1);
+    }
+  });
+}
+
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
