@@ -3,6 +3,7 @@ import * as bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import pool, { adminQuery, withTenantClient } from '../db';
 import { CustomRequest, authenticateToken } from '../middleware/auth';
+import { evaluateMetricsThresholds, DEFAULT_THRESHOLDS } from '../services/thresholdEngine';
 
 const router = Router();
 
@@ -142,7 +143,17 @@ router.post('/report', agentReportLimiter, async (req: Request, res: Response) =
       telemetryHistoryBuffer[server_id].shift();
     }
 
-    return res.status(200).json({ status: 'success', message: 'Metrics processed.' });
+    // Dynamic threshold evaluation & status updating
+    const breaches = evaluateMetricsThresholds(metrics, name);
+    if (breaches.some(b => b.severity === 'critical')) {
+      await adminQuery("UPDATE monitored_items SET status = 'red' WHERE id = $1", [server_id]);
+    } else if (breaches.some(b => b.severity === 'warning')) {
+      await adminQuery("UPDATE monitored_items SET status = 'yellow' WHERE id = $1", [server_id]);
+    } else {
+      await adminQuery("UPDATE monitored_items SET status = 'green' WHERE id = $1", [server_id]);
+    }
+
+    return res.status(200).json({ status: 'success', message: 'Metrics processed.', breaches: breaches.length });
   } catch (err) {
     console.error('Agent report failed:', err);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -239,6 +250,49 @@ router.post('/revoke', authenticateToken, async (req: CustomRequest, res: Respon
     return res.status(200).json({ message: 'Agent token revoked successfully. Agent disconnected.' });
   } catch (err) {
     console.error('Revocation failed:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// GET /api/agent/thresholds/rules (Retrieve tenant dynamic threshold configurations)
+router.get('/thresholds/rules', authenticateToken, async (req: CustomRequest, res: Response) => {
+  const user = req.user!;
+  try {
+    const rules = await withTenantClient(user.tenantId, async (client) => {
+      const dbRes = await client.query('SELECT * FROM alert_threshold_rules ORDER BY created_at DESC');
+      return dbRes.rows;
+    });
+    return res.status(200).json({ rules, defaults: DEFAULT_THRESHOLDS });
+  } catch (err) {
+    console.error('Fetch threshold rules failed:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// POST /api/agent/thresholds/rules (Create or update dynamic threshold rule)
+router.post('/thresholds/rules', authenticateToken, async (req: CustomRequest, res: Response) => {
+  const user = req.user!;
+  const { monitored_item_id, metric_name, warning_threshold, critical_threshold } = req.body;
+
+  if (!metric_name || warning_threshold === undefined || critical_threshold === undefined) {
+    return res.status(400).json({ error: 'metric_name, warning_threshold, and critical_threshold are required.' });
+  }
+
+  try {
+    const rule = await withTenantClient(user.tenantId, async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO alert_threshold_rules 
+          (tenant_id, monitored_item_id, metric_name, warning_threshold, critical_threshold)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [user.tenantId, monitored_item_id || null, metric_name, warning_threshold, critical_threshold]
+      );
+      return insertRes.rows[0];
+    });
+
+    return res.status(201).json({ status: 'success', rule });
+  } catch (err) {
+    console.error('Create threshold rule failed:', err);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
