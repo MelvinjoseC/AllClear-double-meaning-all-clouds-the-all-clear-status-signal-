@@ -102,7 +102,7 @@ export const UrlCard: React.FC<UrlCardProps> = ({ item, onDelete, token }) => {
           <p className="text-[11px] text-gray-500">Continuous probe interval: 60s</p>
         </div>
 
-        {/* SSL Expiration */}
+        {/* SSL Expiration & Security Grade */}
         <div className="bg-[#0b0f19] border border-darkBorder rounded-2xl p-3">
           <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
             <span className="flex items-center gap-1.5">
@@ -114,6 +114,21 @@ export const UrlCard: React.FC<UrlCardProps> = ({ item, onDelete, token }) => {
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               )}
               <span>TLS / SSL</span>
+              {ssl?.security_grade && (
+                <span
+                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                    ssl.security_grade.startsWith('A')
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : ssl.security_grade === 'B'
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : ssl.security_grade === 'C'
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  }`}
+                >
+                  Grade {ssl.security_grade}
+                </span>
+              )}
             </span>
             <span
               className={`font-mono text-xs font-bold ${
@@ -127,9 +142,25 @@ export const UrlCard: React.FC<UrlCardProps> = ({ item, onDelete, token }) => {
               {ssl ? `${ssl.days_remaining}d left` : 'HTTPS Valid'}
             </span>
           </div>
-          <p className="text-[11px] text-gray-500 truncate">
-            {ssl?.issuer ? `CA: ${ssl.issuer}` : 'TLS Handshake 200 OK'}
-          </p>
+          <div className="flex items-center justify-between text-[11px] text-gray-500">
+            <span className="truncate max-w-[140px]">{ssl?.issuer ? `CA: ${ssl.issuer}` : 'TLS Handshake OK'}</span>
+            {ssl?.protocol && <span className="font-mono text-[10px] text-gray-400">{ssl.protocol}</span>}
+          </div>
+          {ssl?.sans && ssl.sans.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2 pt-1.5 border-t border-darkBorder/40">
+              {ssl.sans.slice(0, 3).map((san, idx) => (
+                <span
+                  key={idx}
+                  className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-darkCard text-gray-400 border border-darkBorder"
+                >
+                  {san}
+                </span>
+              ))}
+              {ssl.sans.length > 3 && (
+                <span className="text-[9px] font-mono text-gray-500">+{ssl.sans.length - 3} more</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
