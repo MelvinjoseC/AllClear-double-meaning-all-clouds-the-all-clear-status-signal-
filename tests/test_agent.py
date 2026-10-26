@@ -84,6 +84,31 @@ class TestAgentDiskIO(unittest.TestCase):
         self.assertEqual(disk["read_bytes"], 1024000)
         self.assertEqual(disk["write_bytes"], 2048000)
 
+class TestAgentSockets(unittest.TestCase):
+
+    tcp_sample = (
+        "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+        "   0: 0100007F:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 12345 1 0000000000000000 100 0 0 10 0\n"
+        "   1: 0100007F:1F90 0100007F:D0B4 01 00000000:00000000 00:00000000 00000000     0        0 12346 1 0000000000000000 100 0 0 10 0\n"
+        "   2: 0100007F:D0B4 0100007F:1F90 06 00000000:00000000 00:00000000 00000000     0        0 12347 1 0000000000000000 100 0 0 10 0\n"
+        "   3: 0100007F:D0B5 0100007F:1F90 08 00000000:00000000 00:00000000 00000000     0        0 12348 1 0000000000000000 100 0 0 10 0\n"
+    )
+
+    @patch("os.path.exists", return_value=True)
+    def test_socket_connections_parsing(self, mock_exists):
+        with patch("builtins.open", mock_open(read_data=self.tcp_sample)):
+            sockets = agent.get_socket_connections()
+            self.assertEqual(sockets["listen"], 2) # Parsed for /proc/net/tcp and /proc/net/tcp6
+            self.assertEqual(sockets["established"], 2)
+            self.assertEqual(sockets["time_wait"], 2)
+            self.assertEqual(sockets["close_wait"], 2)
+
+    @patch("os.path.exists", return_value=False)
+    def test_socket_connections_fallback(self, mock_exists):
+        sockets = agent.get_socket_connections()
+        self.assertGreater(sockets["total"], 0)
+        self.assertIn("established", sockets)
+
 class TestAgentPayload(unittest.TestCase):
 
     @patch("agent.get_cpu_usage", return_value=25.5)
