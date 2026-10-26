@@ -31,9 +31,12 @@ async function runAsyncTest(name, fn) {
     buildSlackPayload, 
     buildDiscordPayload, 
     buildCustomWebhookPayload, 
-    buildTelegramMessage 
+    buildTelegramMessage,
+    buildPagerDutyPayload,
+    buildMSTeamsPayload
   } = require('../backend/dist/services/notifier');
-  const { inspectSslCertificate } = require('../backend/dist/services/sslProber');
+  const { inspectSslCertificate, calculateSslSecurityGrade } = require('../backend/dist/services/sslProber');
+  const { evaluateMetricsThresholds, DEFAULT_THRESHOLDS } = require('../backend/dist/services/thresholdEngine');
 
   // 1. Alert Webhook Translation Tests
   runTest('Alert Translation - HostHighCpu', () => {
@@ -218,5 +221,83 @@ async function runAsyncTest(name, fn) {
     assert.strictEqual(dbRecord.tenant_id, 'tenant-uuid-1', 'Should resolve correct tenant');
   });
 
-  console.log('\n🚀 All 10 backend test suites passed successfully with zero failures!\n');
+  // 5. PagerDuty Events API v2 Builder Test
+  runTest('PagerDuty Events API v2 Payload Builder', () => {
+    const notification = {
+      alertName: 'HostHighCpu',
+      monitoredItemName: 'aws-ec2-api-gateway',
+      status: 'firing',
+      severity: 'critical',
+      value: '95.0',
+      timestamp: new Date().toISOString()
+    };
+    const pdPayload = buildPagerDutyPayload('pd-test-key-12345', notification);
+    assert.strictEqual(pdPayload.routing_key, 'pd-test-key-12345');
+    assert.strictEqual(pdPayload.event_action, 'trigger');
+    assert.strictEqual(pdPayload.dedup_key, 'allclear-aws-ec2-api-gateway-HostHighCpu');
+    assert.strictEqual(pdPayload.payload.severity, 'critical');
+    assert.strictEqual(pdPayload.payload.source, 'aws-ec2-api-gateway');
+  });
+
+  // 6. Microsoft Teams Adaptive Card Builder Test
+  runTest('Microsoft Teams Adaptive Card Payload Builder', () => {
+    const notification = {
+      alertName: 'HostHighDisk',
+      monitoredItemName: 'azure-storage-node',
+      status: 'resolved',
+      severity: 'warning',
+      timestamp: new Date().toISOString()
+    };
+    const teamsPayload = buildMSTeamsPayload(notification);
+    assert.strictEqual(teamsPayload.type, 'message');
+    const attachment = teamsPayload.attachments[0];
+    assert.strictEqual(attachment.contentType, 'application/vnd.microsoft.card.adaptive');
+    assert.ok(attachment.content.body[0].text.includes('Resolved'));
+  });
+
+  // 7. Dynamic Metric Alert Threshold Engine Test
+  runTest('Dynamic Thresholds - Metric Evaluation & Overrides', () => {
+    // Nominal sample (below thresholds)
+    const nominalBreaches = evaluateMetricsThresholds(
+      { cpu_usage_percentage: 25.0, memory_usage_percentage: 45.0, disk_usage_percentage: 50.0 },
+      'test-host-1'
+    );
+    assert.strictEqual(nominalBreaches.length, 0, 'Nominal metrics should produce zero breaches');
+
+    // Breach sample with default thresholds (CPU > 90% is critical)
+    const criticalBreaches = evaluateMetricsThresholds(
+      { cpu_usage_percentage: 95.0, memory_usage_percentage: 50.0, disk_usage_percentage: 50.0 },
+      'prod-server'
+    );
+    assert.strictEqual(criticalBreaches.length, 1);
+    assert.strictEqual(criticalBreaches[0].severity, 'critical');
+    assert.strictEqual(criticalBreaches[0].metricName, 'cpu');
+
+    // Custom rule override: raise CPU warning threshold to 96%
+    const customRules = [
+      { metric_name: 'cpu', warning_threshold: 96.0, critical_threshold: 99.0, is_enabled: true }
+    ];
+    const overriddenBreaches = evaluateMetricsThresholds(
+      { cpu_usage_percentage: 95.0, memory_usage_percentage: 50.0, disk_usage_percentage: 50.0 },
+      'prod-server',
+      customRules
+    );
+    assert.strictEqual(overriddenBreaches.length, 0, 'Custom threshold should suppress breach under 96%');
+  });
+
+  // 8. SSL Security Grade Inspector Test
+  runTest('SSL Security Grade Calculation', () => {
+    // Expired cert -> Grade F
+    assert.strictEqual(calculateSslSecurityGrade(true, -1, 'TLSv1.3'), 'F');
+    // Unauthorized cert -> Grade F
+    assert.strictEqual(calculateSslSecurityGrade(false, 90, 'TLSv1.3'), 'F');
+    // Cert expiring in 5 days -> Grade C
+    assert.strictEqual(calculateSslSecurityGrade(true, 5, 'TLSv1.3'), 'C');
+    // TLS 1.3 with 60 days remaining -> Grade A+
+    assert.strictEqual(calculateSslSecurityGrade(true, 60, 'TLSv1.3'), 'A+');
+    // TLS 1.2 with 25 days remaining -> Grade A
+    assert.strictEqual(calculateSslSecurityGrade(true, 25, 'TLSv1.2'), 'A');
+  });
+
+  console.log('\n🚀 All 14 backend test suites passed successfully with zero failures!\n');
 })();
