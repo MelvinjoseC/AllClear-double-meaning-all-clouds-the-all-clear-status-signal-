@@ -180,6 +180,10 @@ export async function sendAlert(tenantId: string, email: string, whatsappNumber:
         await sendCustomWebhookAlert(config.url, config.secret, notification);
       } else if (channel.channel_type === 'telegram' && config.bot_token && config.chat_id) {
         await sendTelegramAlert(config.bot_token, config.chat_id, notification);
+      } else if (channel.channel_type === 'pagerduty' && config.routing_key) {
+        await sendPagerDutyAlert(config.routing_key, notification);
+      } else if (channel.channel_type === 'msteams' && config.webhook_url) {
+        await sendMSTeamsAlert(config.webhook_url, notification);
       }
     }
   } catch (err) {
@@ -195,6 +199,12 @@ export async function sendAlert(tenantId: string, email: string, whatsappNumber:
   }
   if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
     await sendTelegramAlert(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHAT_ID, notification);
+  }
+  if (process.env.PAGERDUTY_ROUTING_KEY) {
+    await sendPagerDutyAlert(process.env.PAGERDUTY_ROUTING_KEY, notification);
+  }
+  if (process.env.MSTEAMS_WEBHOOK_URL) {
+    await sendMSTeamsAlert(process.env.MSTEAMS_WEBHOOK_URL, notification);
   }
 }
 
@@ -391,5 +401,103 @@ export async function sendTelegramAlert(
   };
   const ok = await postJson(telegramUrl, payload);
   if (ok) console.log(`[Telegram Dispatch] Alert message posted to chat ${chatId}.`);
+  return ok;
+}
+
+/**
+ * PagerDuty Events API v2 Payload Builder
+ */
+export function buildPagerDutyPayload(routingKey: string, notification: AlertNotification): any {
+  const { message, action } = translateAlert(notification);
+  return {
+    routing_key: routingKey,
+    event_action: notification.status === 'resolved' ? 'resolve' : 'trigger',
+    dedup_key: `allclear-${notification.monitoredItemName}-${notification.alertName}`,
+    payload: {
+      summary: `[AllClear] ${notification.monitoredItemName}: ${notification.alertName} (${notification.severity})`,
+      timestamp: new Date(notification.timestamp).toISOString(),
+      severity: notification.severity === 'critical' ? 'critical' : 'warning',
+      source: notification.monitoredItemName,
+      component: 'infrastructure',
+      custom_details: {
+        message,
+        suggested_action: action,
+        status: notification.status,
+        value: notification.value || null,
+      },
+    },
+    client: 'AllClear Observability Engine',
+    client_url: 'https://allclear.internal',
+  };
+}
+
+export async function sendPagerDutyAlert(
+  routingKey: string,
+  notification: AlertNotification
+): Promise<boolean> {
+  const payload = buildPagerDutyPayload(routingKey, notification);
+  const pagerDutyUrl = 'https://events.pagerduty.com/v2/enqueue';
+  const ok = await postJson(pagerDutyUrl, payload);
+  if (ok) console.log(`[PagerDuty Dispatch] Incident event posted to PagerDuty.`);
+  return ok;
+}
+
+/**
+ * Microsoft Teams Adaptive Card Builder
+ */
+export function buildMSTeamsPayload(notification: AlertNotification): any {
+  const { message, action } = translateAlert(notification);
+  const isResolved = notification.status === 'resolved';
+
+  return {
+    type: 'message',
+    attachments: [
+      {
+        contentType: 'application/vnd.microsoft.card.adaptive',
+        contentUrl: null,
+        content: {
+          $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+          type: 'AdaptiveCard',
+          version: '1.4',
+          body: [
+            {
+              type: 'TextBlock',
+              size: 'Medium',
+              weight: 'Bolder',
+              text: isResolved ? '✅ AllClear: Status Resolved' : '🚨 AllClear: System Alert',
+              color: isResolved ? 'Good' : 'Attention',
+            },
+            {
+              type: 'TextBlock',
+              text: `**Node:** ${notification.monitoredItemName}`,
+              wrap: true,
+            },
+            {
+              type: 'TextBlock',
+              text: message,
+              wrap: true,
+            },
+            {
+              type: 'FactSet',
+              facts: [
+                { title: 'Severity', value: notification.severity.toUpperCase() },
+                { title: 'Status', value: notification.status.toUpperCase() },
+                { title: 'Suggested Action', value: action },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+export async function sendMSTeamsAlert(
+  webhookUrl: string,
+  notification: AlertNotification
+): Promise<boolean> {
+  const payload = buildMSTeamsPayload(notification);
+  const ok = await postJson(webhookUrl, payload);
+  if (ok) console.log(`[MS Teams Dispatch] Card message posted to Microsoft Teams.`);
   return ok;
 }
