@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS monitored_items (
     name VARCHAR(255) NOT NULL,
     url VARCHAR(2048), -- Nullable for servers, mandatory for URLs
     cloud_provider VARCHAR(50) DEFAULT 'other' CHECK (cloud_provider IN ('aws', 'gcp', 'azure', 'digitalocean', 'baremetal', 'other')),
+    environment VARCHAR(32) DEFAULT 'production' CHECK (environment IN ('production', 'staging', 'development')),
+    tags TEXT[] DEFAULT '{}',
     status VARCHAR(50) NOT NULL DEFAULT 'green' CHECK (status IN ('green', 'yellow', 'red')),
     last_checked_at TIMESTAMP WITH TIME ZONE,
     uptime_percentage NUMERIC(5, 2) DEFAULT 100.00,
@@ -91,9 +93,35 @@ CREATE TABLE IF NOT EXISTS notification_channels (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE NOT NULL,
     name VARCHAR(255) NOT NULL,
-    channel_type VARCHAR(50) NOT NULL CHECK (channel_type IN ('slack', 'discord', 'telegram', 'webhook', 'whatsapp', 'email')),
+    channel_type VARCHAR(50) NOT NULL CHECK (channel_type IN ('slack', 'discord', 'telegram', 'webhook', 'whatsapp', 'email', 'pagerduty', 'msteams')),
     config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
     is_enabled BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 9. Alert Threshold Rules (Dynamic thresholds per tenant or specific server)
+CREATE TABLE IF NOT EXISTS alert_threshold_rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE NOT NULL,
+    monitored_item_id UUID REFERENCES monitored_items(id) ON DELETE CASCADE, -- NULL indicates tenant default
+    metric_name VARCHAR(50) NOT NULL CHECK (metric_name IN ('cpu', 'memory', 'disk', 'network_errors', 'tcp_connections', 'ssl_days')),
+    warning_threshold DOUBLE PRECISION NOT NULL,
+    critical_threshold DOUBLE PRECISION NOT NULL,
+    duration_seconds INT DEFAULT 60,
+    is_enabled BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. Audit Logs Table (Tamper-evident administrative compliance trail)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE NOT NULL,
+    actor_email VARCHAR(255) NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(50) NOT NULL,
+    resource_id VARCHAR(100),
+    details JSONB DEFAULT '{}'::jsonb,
+    ip_address VARCHAR(45),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -119,6 +147,12 @@ ALTER TABLE maintenance_windows FORCE ROW LEVEL SECURITY;
 ALTER TABLE notification_channels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification_channels FORCE ROW LEVEL SECURITY;
 
+ALTER TABLE alert_threshold_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alert_threshold_rules FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY;
+
 -- Drop existing policies if script is run multiple times
 DROP POLICY IF EXISTS tenant_users_policy ON users;
 DROP POLICY IF EXISTS tenant_monitored_items_policy ON monitored_items;
@@ -127,6 +161,8 @@ DROP POLICY IF EXISTS tenant_alert_history_policy ON alert_history;
 DROP POLICY IF EXISTS tenant_ssl_certificates_policy ON ssl_certificates;
 DROP POLICY IF EXISTS tenant_maintenance_windows_policy ON maintenance_windows;
 DROP POLICY IF EXISTS tenant_notification_channels_policy ON notification_channels;
+DROP POLICY IF EXISTS tenant_alert_threshold_rules_policy ON alert_threshold_rules;
+DROP POLICY IF EXISTS tenant_audit_logs_policy ON audit_logs;
 
 -- Create Tenant Separation Policies
 CREATE POLICY tenant_users_policy ON users
@@ -154,6 +190,14 @@ CREATE POLICY tenant_maintenance_windows_policy ON maintenance_windows
     USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::UUID);
 
 CREATE POLICY tenant_notification_channels_policy ON notification_channels
+    FOR ALL
+    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::UUID);
+
+CREATE POLICY tenant_alert_threshold_rules_policy ON alert_threshold_rules
+    FOR ALL
+    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::UUID);
+
+CREATE POLICY tenant_audit_logs_policy ON audit_logs
     FOR ALL
     USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::UUID);
 
