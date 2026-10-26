@@ -14,11 +14,49 @@ import ssl
 import shutil
 import platform
 import argparse
+import random
 import urllib.request
 import urllib.error
 
 AGENT_VERSION = "1.1.0"
 CONFIG_PATH = "/etc/cloudmon-agent.conf"
+
+class TelemetryRingBuffer:
+    """Bounded circular buffer to store unsent telemetry payloads during network partitions."""
+    def __init__(self, capacity=60):
+        self.capacity = capacity
+        self.buffer = []
+
+    def push(self, payload):
+        if len(self.buffer) >= self.capacity:
+            # Evict oldest entry (FIFO) to prevent memory ballooning
+            self.buffer.pop(0)
+        self.buffer.append({
+            "buffered_at": time.time(),
+            "payload": payload
+        })
+
+    def pop(self):
+        if self.buffer:
+            return self.buffer.pop(0)
+        return None
+
+    def drain(self, limit=10):
+        items = []
+        while self.buffer and len(items) < limit:
+            items.append(self.buffer.pop(0))
+        return items
+
+    def size(self):
+        return len(self.buffer)
+
+    def is_empty(self):
+        return len(self.buffer) == 0
+
+def calculate_jitter_backoff(retry_delay, max_delay=300):
+    """Calculates exponential backoff with full jitter to avoid thundering herds."""
+    jittered = retry_delay * (0.8 + random.random() * 0.4) # ±20% jitter
+    return min(jittered, max_delay)
 
 def log_error(msg):
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [ERROR] {msg}", file=sys.stderr)
@@ -537,6 +575,7 @@ def main():
 
     retry_delay = 5
     max_retry_delay = 300  # 5 minutes
+    ring_buffer = TelemetryRingBuffer(capacity=60)
 
     while True:
         log_info("Collecting metrics...")
@@ -545,11 +584,19 @@ def main():
 
         if status in (200, 201):
             log_info("Metrics report submitted successfully.")
+            # Drain any previously buffered payloads accumulated during network downtime
+            if not ring_buffer.is_empty():
+                buffered_batch = ring_buffer.drain(limit=5)
+                log_info(f"Draining {len(buffered_batch)} buffered payloads after link recovery ({ring_buffer.size()} remaining)...")
+                for item in buffered_batch:
+                    send_report(api_url, token, item["payload"], ca_bundle)
             retry_delay = 5
             time.sleep(check_interval)
         else:
-            log_error(f"Report submission failed. Retrying in {retry_delay}s...")
-            time.sleep(retry_delay)
+            ring_buffer.push(payload)
+            jittered_delay = calculate_jitter_backoff(retry_delay, max_retry_delay)
+            log_error(f"Report submission failed (queued in offline ring buffer, depth={ring_buffer.size()}). Retrying in {jittered_delay:.1f}s...")
+            time.sleep(jittered_delay)
             retry_delay = min(retry_delay * 2, max_retry_delay)
 
 if __name__ == "__main__":

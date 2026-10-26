@@ -130,5 +130,39 @@ class TestAgentPayload(unittest.TestCase):
         self.assertIn("disk_read_bytes", m)
         self.assertEqual(m["processes"]["nginx"], 12000.0)
 
+class TestTelemetryRingBuffer(unittest.TestCase):
+
+    def test_buffer_push_and_drain(self):
+        buf = agent.TelemetryRingBuffer(capacity=5)
+        self.assertTrue(buf.is_empty())
+        self.assertEqual(buf.size(), 0)
+
+        for i in range(3):
+            buf.push({"sample": i})
+
+        self.assertEqual(buf.size(), 3)
+        self.assertFalse(buf.is_empty())
+
+        drained = buf.drain(limit=2)
+        self.assertEqual(len(drained), 2)
+        self.assertEqual(drained[0]["payload"]["sample"], 0)
+        self.assertEqual(drained[1]["payload"]["sample"], 1)
+        self.assertEqual(buf.size(), 1)
+
+    def test_buffer_capacity_eviction(self):
+        buf = agent.TelemetryRingBuffer(capacity=3)
+        for i in range(5):
+            buf.push({"idx": i})
+        # Should stay at capacity 3, having evicted index 0 and 1
+        self.assertEqual(buf.size(), 3)
+        oldest = buf.pop()
+        self.assertEqual(oldest["payload"]["idx"], 2)
+
+    def test_jitter_backoff_bounds(self):
+        for _ in range(20):
+            delay = agent.calculate_jitter_backoff(10, max_delay=300)
+            self.assertGreaterEqual(delay, 8.0) # 10 * 0.8
+            self.assertLessEqual(delay, 12.0)   # 10 * 1.2
+
 if __name__ == "__main__":
     unittest.main()
